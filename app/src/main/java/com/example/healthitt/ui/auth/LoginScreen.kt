@@ -20,6 +20,7 @@ fun LoginScreen(
 ) {
     var emailOrPhone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var errorText by remember { mutableStateOf("") }
 
     Box(
         modifier = Modifier
@@ -46,8 +47,11 @@ fun LoginScreen(
             
             OutlinedTextField(
                 value = emailOrPhone,
-                onValueChange = { emailOrPhone = it },
-                label = { Text("Email or Phone Number") },
+                onValueChange = { 
+                    emailOrPhone = it
+                    errorText = "" 
+                },
+                label = { Text("Email (@gmail.com) or 10-digit Phone") },
                 modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
@@ -63,7 +67,10 @@ fun LoginScreen(
             
             OutlinedTextField(
                 value = password,
-                onValueChange = { password = it },
+                onValueChange = { 
+                    password = it
+                    errorText = ""
+                },
                 label = { Text("Password") },
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
@@ -76,11 +83,30 @@ fun LoginScreen(
                     unfocusedBorderColor = Color.Gray
                 )
             )
+
+            if (errorText.isNotEmpty()) {
+                Text(
+                    text = errorText,
+                    color = Color.Red,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
             
             Spacer(modifier = Modifier.height(32.dp))
             
             Button(
-                onClick = { onLoginClicked(emailOrPhone, password) },
+                onClick = { 
+                    val isEmail = emailOrPhone.contains("@gmail.com")
+                    val isPhone = emailOrPhone.length == 10 && emailOrPhone.all { it.isDigit() }
+                    val isStrongPassword = password.length >= 6
+
+                    when {
+                        !isEmail && !isPhone -> errorText = "Enter a valid @gmail.com or 10-digit phone"
+                        !isStrongPassword -> errorText = "Password must be at least 6 characters"
+                        else -> onLoginClicked(emailOrPhone, password)
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B1FA2))
             ) {

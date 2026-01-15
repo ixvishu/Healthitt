@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "93578549057",
+    "project_id": "healthitt-d5055",
+    "storage_bucket": "healthitt-d5055.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:93578549057:android:913ea83640c4f636c0f3c0",
+        "android_client_info": {
+          "package_name": "com.example.healthitt"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBS0pIG9AcKkFBsvFi_JX_A2ZHIXIHa0ZA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

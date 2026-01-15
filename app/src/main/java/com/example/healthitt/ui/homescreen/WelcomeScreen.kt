@@ -23,6 +23,7 @@ import com.example.healthitt.ui.theme.HealthittTheme
 fun WelcomeScreen(
     onNavigateToLogin: () -> Unit
 ) {
+    // Background animation: shifting the gradient center
     val infiniteTransition = rememberInfiniteTransition(label = "background")
     val offset by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -34,6 +35,7 @@ fun WelcomeScreen(
         label = "offset"
     )
 
+    // Logo pop-up animation
     var startAnimation by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
@@ -66,36 +68,26 @@ fun WelcomeScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Updated to use your healthitt logo
             Image(
                 painter = painterResource(id = R.drawable.logo_healthitt),
-                contentDescription = "Healthitt Logo",
+                contentDescription = "App Logo",
                 modifier = Modifier
-                    .size(200.dp)
+                    .size(150.dp)
                     .scale(scale)
             )
             
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "Healthitt",
-                style = MaterialTheme.typography.headlineLarge,
+                text = "Welcome to Healthitt!",
+                style = MaterialTheme.typography.headlineMedium,
                 color = Color.White,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            
-            Text(
-                text = "Your journey to fitness begins here",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.LightGray,
-                modifier = Modifier.padding(bottom = 32.dp)
+                modifier = Modifier.padding(bottom = 24.dp)
             )
             
             Button(
                 onClick = onNavigateToLogin,
-                modifier = Modifier
-                    .fillMaxWidth(0.7f)
-                    .scale(if (startAnimation) 1f else 0.8f)
+                modifier = Modifier.scale(if (startAnimation) 1f else 0.8f)
             ) {
                 Text("Get Started")
             }
