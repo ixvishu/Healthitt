@@ -7,12 +7,15 @@ import androidx.room.PrimaryKey
 data class User(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val name: String = "",
-    val age: String = "",
-    val weight: String = "",
-    val height: String = "",
+    val dob: String = "2000-01-01",
+    val weight: String = "70",
+    val height: String = "5.8",
+    val gender: String = "Male",
     val email: String = "",
     val phone: String = "",
     val password: String = "",
     val profilePicUrl: String = "",
-    val currentSteps: Int = 0
+    val currentSteps: Int = 0,
+    val calorieGoal: Int = 2000,
+    val bmi: Double = 0.0
 )

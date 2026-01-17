@@ -28,6 +28,7 @@ import com.example.healthitt.ui.auth.RegisterScreen
 import com.example.healthitt.ui.dashboard.DashboardScreen
 import com.example.healthitt.ui.homescreen.WelcomeScreen
 import com.example.healthitt.ui.workout.WorkoutScreen
+import com.example.healthitt.ui.bmi.BMIScreen
 import com.example.healthitt.ui.theme.HealthittTheme
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
@@ -138,12 +139,12 @@ fun HealthittApp() {
         }
         composable("register") {
             RegisterScreen(
-                onRegisterClicked = { name, age, weight, height, email, phone, password ->
+                onRegisterClicked = { name, dob, weight, height, gender, email, phone, password ->
                     scope.launch {
-                        val userId = email.replace(".", "_") // Consistent key usage
+                        val userId = email.replace(".", "_")
                         val newUser = User(
-                            name = name, age = age, weight = weight, height = height, 
-                            email = email, phone = phone, password = password
+                            name = name, dob = dob, weight = weight, height = height, 
+                            gender = gender, email = email, phone = phone, password = password
                         )
                         try {
                             database.child(userId).setValue(newUser).await()
@@ -192,11 +193,19 @@ fun HealthittApp() {
                         popUpTo(0) { inclusive = true }
                     }
                 },
-                onNavigateToWorkouts = { navController.navigate("workouts") }
+                onNavigateToWorkouts = { navController.navigate("workouts") },
+                onNavigateToBMI = { navController.navigate("bmi/$userEmail") }
             )
         }
         composable("workouts") {
             WorkoutScreen(onBack = { navController.popBackStack() })
+        }
+        composable(
+            route = "bmi/{userEmail}",
+            arguments = listOf(navArgument("userEmail") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val userEmail = backStackEntry.arguments?.getString("userEmail") ?: ""
+            BMIScreen(userEmail = userEmail, onBack = { navController.popBackStack() })
         }
     }
 }
