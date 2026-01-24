@@ -12,21 +12,23 @@ android {
 
     defaultConfig {
         applicationId = "com.example.healthitt"
-        minSdk = 24
+        minSdk = 26 // Increased for Health Connect compatibility
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "3.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -55,18 +57,22 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
     
+    // Health Connect
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha11")
+
     // Room Backend (Local)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
-    // Firebase Backend (Cloud - Laptop Access)
+    // Firebase Backend (Cloud)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.database)
     implementation(libs.firebase.analytics)
 
     // Image Loading
     implementation(libs.coil.compose)
+    implementation("io.coil-kt:coil-gif:2.5.0")
     
     // AI Integration
     implementation(libs.google.generativeai)

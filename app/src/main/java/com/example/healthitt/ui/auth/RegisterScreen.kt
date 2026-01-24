@@ -1,26 +1,29 @@
 package com.example.healthitt.ui.auth
 
 import android.app.DatePickerDialog
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.healthitt.ui.theme.*
 import java.util.*
 
 @Composable
@@ -44,133 +47,176 @@ fun RegisterScreen(
     val datePickerDialog = DatePickerDialog(
         context,
         { _, year, month, day ->
-            dob = String.format("%04d-%02d-%02d", year, month + 1, day)
+            dob = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, day)
         },
         calendar.get(Calendar.YEAR),
         calendar.get(Calendar.MONTH),
         calendar.get(Calendar.DAY_OF_MONTH)
     )
 
-    Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black, Color(0xFF1A0033))))) {
+    Box(modifier = Modifier.fillMaxSize().background(NightDark)) {
+        // Modern Animated Background Orbs
+        Box(
+            modifier = Modifier
+                .size(400.dp)
+                .offset(x = (-150).dp, y = (-100).dp)
+                .blur(80.dp)
+                .background(NeonCyan.copy(alpha = 0.1f), CircleShape)
+        )
+        
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .size(300.dp)
+                .offset(x = 100.dp, y = 100.dp)
+                .blur(60.dp)
+                .background(NeonGreen.copy(alpha = 0.08f), CircleShape)
+        )
+
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.Start
         ) {
-            Text("Create Account", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(Modifier.height(60.dp))
             
-            OutlinedTextField(
-                value = name, onValueChange = { name = it },
-                label = { Text("Full Name") },
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Default.Person, null) },
-                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Color(0xFFBB86FC))
+            Text(
+                text = "Join Us",
+                color = PureWhite.copy(alpha = 0.5f),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp
+            )
+            Text(
+                text = "Healthitt",
+                style = MaterialTheme.typography.displayLarge.copy(
+                    brush = Brush.horizontalGradient(ActiveGradient)
+                ),
+                fontWeight = FontWeight.Black,
+                letterSpacing = (-2).sp
             )
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
-            // Gender Selection
-            Text("Gender", color = Color.White.copy(0.6f), modifier = Modifier.fillMaxWidth(), fontSize = 14.sp)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                listOf("Male", "Female").forEach { g ->
-                    Button(
-                        onClick = { gender = g },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (gender == g) Color(0xFFBB86FC) else Color.White.copy(0.05f)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(g, color = if (gender == g) Color.Black else Color.White)
+            // Glassmorphism Container
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, PureWhite.copy(0.05f), RoundedCornerShape(32.dp)),
+                color = GlassCard.copy(alpha = 0.8f),
+                shape = RoundedCornerShape(32.dp)
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text("Your Details", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Spacer(Modifier.height(24.dp))
+                    
+                    RegisterField(value = name, onValueChange = { name = it }, label = "Full Name", icon = Icons.Rounded.Person)
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text("Gender", color = PureWhite.copy(0.4f), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        listOf("Male", "Female", "Other").forEach { g ->
+                            val isSelected = gender == g
+                            Surface(
+                                onClick = { gender = g },
+                                modifier = Modifier.weight(1f).height(44.dp),
+                                color = if (isSelected) NeonGreen.copy(0.2f) else PureWhite.copy(0.05f),
+                                border = if (isSelected) BorderStroke(1.dp, NeonGreen) else null,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(g, color = if (isSelected) NeonGreen else PureWhite.copy(0.4f), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                            }
+                        }
                     }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    RegisterField(
+                        value = dob, onValueChange = { }, label = "Birth Date", icon = Icons.Rounded.CalendarToday, 
+                        readOnly = true, isDate = true, onIconClick = { datePickerDialog.show() }
+                    )
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        RegisterField(value = weight, onValueChange = { weight = it }, label = "Weight (kg)", icon = Icons.Rounded.MonitorWeight, modifier = Modifier.weight(1f))
+                        RegisterField(value = height, onValueChange = { height = it }, label = "Height (ft)", icon = Icons.Rounded.Height, modifier = Modifier.weight(1f))
+                    }
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    RegisterField(value = email, onValueChange = { email = it }, label = "Email", icon = Icons.Rounded.Email)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    RegisterField(value = phone, onValueChange = { phone = it }, label = "Phone", icon = Icons.Rounded.Phone)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    RegisterField(value = password, onValueChange = { password = it }, label = "Password", icon = Icons.Rounded.Lock, isPassword = true)
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // DOB
-            OutlinedTextField(
-                value = dob, onValueChange = { },
-                label = { Text("Date of Birth") },
-                modifier = Modifier.fillMaxWidth(),
-                readOnly = true,
-                trailingIcon = { IconButton(onClick = { datePickerDialog.show() }) { Icon(Icons.Default.CalendarToday, null, tint = Color(0xFFBB86FC)) } },
-                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Color(0xFFBB86FC))
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(
-                    value = weight, onValueChange = { weight = it },
-                    label = { Text("Weight (kg)") },
-                    modifier = Modifier.weight(1f),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Color(0xFFBB86FC))
-                )
-                OutlinedTextField(
-                    value = height, onValueChange = { height = it },
-                    label = { Text("Height (ft.in)") },
-                    modifier = Modifier.weight(1f),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Color(0xFFBB86FC))
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            OutlinedTextField(
-                value = email, onValueChange = { email = it },
-                label = { Text("Email Address") },
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Default.Email, null) },
-                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Color(0xFFBB86FC))
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            OutlinedTextField(
-                value = phone, onValueChange = { phone = it },
-                label = { Text("Phone Number") },
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Default.Phone, null) },
-                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Color(0xFFBB86FC))
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            OutlinedTextField(
-                value = password, onValueChange = { password = it },
-                label = { Text("Password") },
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = PasswordVisualTransformation(),
-                leadingIcon = { Icon(Icons.Default.Lock, null) },
-                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Color(0xFFBB86FC))
-            )
-            
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(40.dp))
             
             Button(
                 onClick = {
                     if (name.isNotEmpty() && dob.isNotEmpty() && email.isNotEmpty() && phone.isNotEmpty()) {
-                        checkUniqueness(email, phone) { isUnique, error ->
-                            if (isUnique) {
-                                onRegisterClicked(name, dob, weight, height, gender, email, phone, password)
-                            }
+                        checkUniqueness(email, phone) { isUnique, _ ->
+                            if (isUnique) onRegisterClicked(name, dob, weight, height, gender, email, phone, password)
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBB86FC)),
-                shape = RoundedCornerShape(16.dp)
+                modifier = Modifier.fillMaxWidth().height(64.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues(0.dp),
+                shape = RoundedCornerShape(20.dp)
             ) {
-                Text("Register", color = Color.Black, fontWeight = FontWeight.Bold)
+                Box(
+                    modifier = Modifier.fillMaxSize().background(Brush.horizontalGradient(ActiveGradient)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Create Profile", color = NightDark, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                }
             }
             
-            TextButton(onClick = onNavigateToLogin) {
-                Text("Back to Login", color = Color.White.copy(0.7f))
+            Spacer(Modifier.height(16.dp))
+            TextButton(onClick = onNavigateToLogin, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Text("Already a member? Sign In", color = NeonCyan, fontWeight = FontWeight.Black)
             }
+            Spacer(Modifier.height(60.dp))
         }
     }
+}
+
+@Composable
+fun RegisterField(
+    value: String, 
+    onValueChange: (String) -> Unit, 
+    label: String, 
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+    readOnly: Boolean = false,
+    isDate: Boolean = false,
+    isPassword: Boolean = false,
+    onIconClick: (() -> Unit)? = null
+) {
+    OutlinedTextField(
+        value = value, onValueChange = onValueChange,
+        label = { Text(label) },
+        modifier = modifier.fillMaxWidth(),
+        readOnly = readOnly,
+        leadingIcon = { Icon(icon, null, tint = NeonCyan, modifier = Modifier.size(20.dp)) },
+        trailingIcon = if (isDate) { { IconButton(onClick = onIconClick!!) { Icon(Icons.Rounded.Event, null, tint = NeonCyan) } } } else null,
+        visualTransformation = if (isPassword) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        shape = RoundedCornerShape(16.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = PureWhite,
+            unfocusedTextColor = PureWhite,
+            focusedBorderColor = NeonCyan,
+            unfocusedBorderColor = PureWhite.copy(0.1f),
+            focusedLabelColor = NeonCyan,
+            unfocusedLabelColor = PureWhite.copy(0.4f)
+        )
+    )
 }

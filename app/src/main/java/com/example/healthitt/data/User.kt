@@ -17,5 +17,13 @@ data class User(
     val profilePicUrl: String = "",
     val currentSteps: Int = 0,
     val calorieGoal: Int = 2000,
-    val bmi: Double = 0.0
+    val bmi: Double = 0.0,
+    val appVersion: String = "1.0.0",
+    val isDarkMode: Boolean = true,
+    // Vault Fields
+    val emergencyContact: String = "",
+    val bloodGroup: String = "",
+    val allergies: String = "",
+    // Dynamic Medications
+    val medications: List<Medication> = emptyList()
 )
