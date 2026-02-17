@@ -1,6 +1,7 @@
 package com.example.healthitt.ui.main
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -14,8 +15,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -44,39 +45,44 @@ fun MainScreen(
     val bottomNavController = rememberNavController()
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            Box(
+            // Docked Bottom Navigation with rounded top corners for a premium feel
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 20.dp)
+                    .navigationBarsPadding(),
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                tonalElevation = 16.dp,
+                shadowElevation = 24.dp,
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
             ) {
                 AppBottomNavigation(navController = bottomNavController)
             }
-        },
-        containerColor = MaterialTheme.colorScheme.background
+        }
     ) { padding ->
-        Box(modifier = Modifier.padding(bottom = padding.calculateBottomPadding())) {
-            NavHost(
-                navController = bottomNavController, 
-                startDestination = "dashboard"
-            ) {
-                composable("dashboard") {
-                    DashboardScreen(
-                        userEmail = userEmail,
-                        isDarkMode = isDarkMode,
-                        onThemeToggle = onThemeToggle,
-                        onLogout = onLogout,
-                        onNavigateToWorkouts = { mainNavController.navigate("workouts") },
-                        onNavigateToBMI = { mainNavController.navigate("bmi/$userEmail") },
-                        onNavigateToTodo = { mainNavController.navigate("todo/$userEmail") }
-                    )
-                }
-                composable("leaderboard") { 
-                    LeaderboardScreen() 
-                }
-                composable("community") { 
-                    CommunityScreen(userName = userName) 
-                }
+        NavHost(
+            navController = bottomNavController, 
+            startDestination = "dashboard",
+            modifier = Modifier.padding(padding)
+        ) {
+            composable("dashboard") {
+                DashboardScreen(
+                    userEmail = userEmail,
+                    isDarkMode = isDarkMode,
+                    onThemeToggle = onThemeToggle,
+                    onLogout = onLogout,
+                    onNavigateToWorkouts = { mainNavController.navigate("workouts") },
+                    onNavigateToBMI = { mainNavController.navigate("bmi/$userEmail") },
+                    onNavigateToTodo = { mainNavController.navigate("todo/$userEmail") }
+                )
+            }
+            composable("leaderboard") { 
+                LeaderboardScreen() 
+            }
+            composable("community") { 
+                CommunityScreen(userName = userName) 
             }
         }
     }
@@ -94,71 +100,50 @@ fun AppBottomNavigation(navController: NavHostController) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(72.dp),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-        tonalElevation = 12.dp,
-        shadowElevation = 8.dp
+            .height(80.dp)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            items.forEach { item ->
-                val isSelected = currentRoute == item.route
-                
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .noRippleClickable {
-                            if (currentRoute != item.route) {
-                                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                                navController.navigate(item.route) {
-                                    popUpTo(navController.graph.startDestinationId) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
+        items.forEach { item ->
+            val isSelected = currentRoute == item.route
+            
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .noRippleClickable {
+                        if (currentRoute != item.route) {
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            navController.navigate(item.route) {
+                                popUpTo(navController.graph.startDestinationId) {
+                                    saveState = true
                                 }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.title,
-                            tint = if (isSelected) EmeraldPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                            modifier = Modifier.size(26.dp)
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = item.title,
-                            fontSize = 10.sp,
-                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                            color = if (isSelected) EmeraldPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                            letterSpacing = 0.5.sp
-                        )
-                        
-                        if (isSelected) {
-                            Box(
-                                modifier = Modifier
-                                    .padding(top = 4.dp)
-                                    .size(width = 16.dp, height = 3.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(EmeraldPrimary)
-                            )
                         }
                     }
-                }
+                    .padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = item.icon,
+                    contentDescription = item.title,
+                    tint = if (isSelected) EmeraldPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    modifier = Modifier.size(if (isSelected) 28.dp else 24.dp)
+                )
+                Text(
+                    text = item.title,
+                    fontSize = 11.sp,
+                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.Medium,
+                    color = if (isSelected) EmeraldPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    modifier = Modifier.alpha(if (isSelected) 1f else 0.7f)
+                )
             }
         }
     }

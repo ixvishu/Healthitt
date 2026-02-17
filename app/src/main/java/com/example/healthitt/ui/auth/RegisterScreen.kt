@@ -4,7 +4,10 @@ import android.app.DatePickerDialog
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,19 +19,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.healthitt.data.Avatars
 import com.example.healthitt.ui.theme.*
 import java.util.*
 
 @Composable
 fun RegisterScreen(
-    onRegisterClicked: (String, String, String, String, String, String, String, String) -> Unit,
+    onRegisterClicked: (String, String, String, String, String, String, String, String, String) -> Unit,
     onNavigateToLogin: () -> Unit,
     checkUniqueness: (String, String, (Boolean, String?) -> Unit) -> Unit
 ) {
@@ -40,6 +48,7 @@ fun RegisterScreen(
     var email by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var selectedAvatar by remember { mutableStateOf(Avatars.list[0]) }
     
     val context = LocalContext.current
     val calendar = Calendar.getInstance()
@@ -98,7 +107,37 @@ fun RegisterScreen(
                 letterSpacing = (-2).sp
             )
             
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(30.dp))
+
+            // Avatar Selector
+            Text("Choose Your Avatar", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(bottom = 16.dp))
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(Avatars.list) { avatarUrl ->
+                    val isSelected = selectedAvatar == avatarUrl
+                    Surface(
+                        modifier = Modifier
+                            .size(70.dp)
+                            .clip(CircleShape)
+                            .clickable { selectedAvatar = avatarUrl },
+                        shape = CircleShape,
+                        color = if (isSelected) NeonGreen.copy(0.2f) else PureWhite.copy(0.1f),
+                        border = if (isSelected) BorderStroke(3.dp, NeonGreen) else null
+                    ) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context).data(avatarUrl).crossfade(true).build(),
+                            contentDescription = "Avatar",
+                            modifier = Modifier.fillMaxSize().padding(if(isSelected) 4.dp else 0.dp),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(30.dp))
 
             // Glassmorphism Container
             Surface(
@@ -163,7 +202,7 @@ fun RegisterScreen(
                 onClick = {
                     if (name.isNotEmpty() && dob.isNotEmpty() && email.isNotEmpty() && phone.isNotEmpty()) {
                         checkUniqueness(email, phone) { isUnique, _ ->
-                            if (isUnique) onRegisterClicked(name, dob, weight, height, gender, email, phone, password)
+                            if (isUnique) onRegisterClicked(name, dob, weight, height, gender, email, phone, password, selectedAvatar)
                         }
                     }
                 },

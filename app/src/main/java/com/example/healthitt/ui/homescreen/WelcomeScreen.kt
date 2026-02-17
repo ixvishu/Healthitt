@@ -14,161 +14,286 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.tooling.preview.Preview
 import com.example.healthitt.ui.theme.*
+import kotlinx.coroutines.delay
 
 @Composable
 fun WelcomeScreen(
     onNavigateToLogin: () -> Unit
 ) {
-    var startAnimation by remember { mutableStateOf(false) }
+    var stage by remember { mutableIntStateOf(0) }
     
     val infiniteTransition = rememberInfiniteTransition(label = "background")
-    val floatAnim by infiniteTransition.animateFloat(
+    
+    // Smooth floating background orbs
+    val orbOffset1 by infiniteTransition.animateValue(
+        initialValue = Offset.Zero,
+        targetValue = Offset(100f, 150f),
+        typeConverter = Offset.VectorConverter,
+        animationSpec = infiniteRepeatable(
+            animation = tween(10000, easing = LinearOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "orb1"
+    )
+
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(20000, easing = LinearEasing)),
+        label = "rotation"
+    )
+
+    val scanLinePos by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(10000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "float"
+        animationSpec = infiniteRepeatable(tween(4000, easing = LinearEasing)),
+        label = "scanLine"
     )
 
-    val logoScale by animateFloatAsState(
-        targetValue = if (startAnimation) 1f else 0.4f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "logoScale"
-    )
-    
-    val contentAlpha by animateFloatAsState(
-        targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = tween(1500, delayMillis = 600),
-        label = "contentAlpha"
-    )
-
+    // Stage Sequencing
     LaunchedEffect(Unit) {
-        startAnimation = true
+        delay(200)
+        stage = 1 // Logo Entrance
+        delay(700)
+        stage = 2 // Title Reveal
+        delay(500)
+        stage = 3 // Protocols Text
+        delay(500)
+        stage = 4 // Subtext & Button
     }
 
     Box(modifier = Modifier.fillMaxSize().background(NightDark)) {
-        // MODERN NEON FLOW BACKGROUND
-        Canvas(modifier = Modifier.fillMaxSize().blur(90.dp)) {
-            val xPos = size.width * (0.5f + 0.2f * kotlin.math.sin(floatAnim * 2 * Math.PI.toFloat()))
-            val yPos = size.height * (0.4f + 0.1f * kotlin.math.cos(floatAnim * 2 * Math.PI.toFloat()))
+        
+        // --- 1. HUD GRID & SCANNING LAYER ---
+        Canvas(modifier = Modifier.fillMaxSize().alpha(0.15f)) {
+            val gridSpacing = 60.dp.toPx()
             
-            drawCircle(
-                brush = Brush.radialGradient(listOf(NeonGreen.copy(0.12f), Color.Transparent)),
-                radius = 1200f,
-                center = Offset(xPos, yPos)
-            )
+            // Vertical Lines
+            for (x in 0..(size.width / gridSpacing).toInt()) {
+                drawLine(
+                    color = NeonCyan,
+                    start = Offset(x * gridSpacing, 0f),
+                    end = Offset(x * gridSpacing, size.height),
+                    strokeWidth = 1f
+                )
+            }
             
-            drawCircle(
-                brush = Brush.radialGradient(listOf(NeonCyan.copy(0.08f), Color.Transparent)),
-                radius = 1000f,
-                center = Offset(size.width - xPos, size.height - yPos)
+            // Horizontal Lines
+            for (y in 0..(size.height / gridSpacing).toInt()) {
+                drawLine(
+                    color = NeonCyan,
+                    start = Offset(0f, y * gridSpacing),
+                    end = Offset(size.width, y * gridSpacing),
+                    strokeWidth = 1f
+                )
+            }
+
+            // Scanning Line
+            drawLine(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color.Transparent, NeonGreen, Color.Transparent),
+                    startY = scanLinePos * size.height - 100f,
+                    endY = scanLinePos * size.height + 100f
+                ),
+                start = Offset(0f, scanLinePos * size.height),
+                end = Offset(size.width, scanLinePos * size.height),
+                strokeWidth = 4f
             )
         }
 
+        // --- 2. FLOATING ATMOSPHERIC ORBS ---
+        Canvas(modifier = Modifier.fillMaxSize().blur(120.dp)) {
+            drawCircle(
+                brush = Brush.radialGradient(listOf(NeonGreen.copy(0.2f), Color.Transparent)),
+                radius = 1500f,
+                center = Offset(size.width * 0.8f + orbOffset1.x, size.height * 0.1f + orbOffset1.y)
+            )
+            drawCircle(
+                brush = Brush.radialGradient(listOf(NeonCyan.copy(0.15f), Color.Transparent)),
+                radius = 1300f,
+                center = Offset(size.width * 0.2f - orbOffset1.x, size.height * 0.9f - orbOffset1.y)
+            )
+        }
+
+        // --- 3. MAIN CONTENT LAYER ---
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(100.dp))
+            Spacer(Modifier.weight(1.5f))
 
-            // BRAND IDENTITY WITH NEON GLOW
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.scale(logoScale).alpha(contentAlpha)) {
+            // --- THE LOGO CORE ---
+            AnimatedVisibility(
+                visible = stage >= 1,
+                enter = fadeIn(tween(1000)) + scaleIn(spring(Spring.DampingRatioHighBouncy, Spring.StiffnessLow))
+            ) {
                 Box(contentAlignment = Alignment.Center) {
-                    // Outer Glow
-                    Surface(
-                        modifier = Modifier.size(120.dp).blur(20.dp),
-                        shape = CircleShape,
-                        color = NeonGreen.copy(0.2f)
-                    ) {}
+                    // Rotating Outer Geometry
+                    Canvas(modifier = Modifier.size(200.dp).rotate(rotation)) {
+                        drawPath(
+                            path = Path().apply {
+                                val center = Offset(size.width / 2, size.height / 2)
+                                val radius = size.width / 2
+                                moveTo(center.x, center.y - radius)
+                                lineTo(center.x + radius, center.y)
+                                lineTo(center.x, center.y + radius)
+                                lineTo(center.x - radius, center.y)
+                                close()
+                            },
+                            color = NeonGreen.copy(alpha = 0.3f),
+                            style = Stroke(width = 2f)
+                        )
+                    }
+
+                    // Pulsing Glow
+                    val glowScale by infiniteTransition.animateFloat(
+                        initialValue = 1f,
+                        targetValue = 1.3f,
+                        animationSpec = infiniteRepeatable(tween(2000), RepeatMode.Reverse),
+                        label = "glow"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .graphicsLayer { 
+                                scaleX = glowScale
+                                scaleY = glowScale
+                            }
+                            .blur(40.dp)
+                            .background(NeonGreen.copy(0.4f), CircleShape)
+                    )
                     
-                    // Core Icon Placeholder
+                    // The "H" Shield
                     Surface(
-                        modifier = Modifier.size(80.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        color = GlassCard,
-                        border = BorderStroke(2.dp, Brush.linearGradient(ActiveGradient))
+                        modifier = Modifier.size(100.dp),
+                        shape = RoundedCornerShape(32.dp),
+                        color = NightDark.copy(alpha = 0.8f),
+                        border = BorderStroke(2.dp, Brush.sweepGradient(listOf(NeonGreen, NeonCyan, NeonGreen)))
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text("H", color = PureWhite, fontSize = 40.sp, fontWeight = FontWeight.Black)
+                            Text(
+                                "H", 
+                                color = PureWhite, 
+                                fontSize = 52.sp, 
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.graphicsLayer {
+                                    shadowElevation = 20f
+                                }
+                            )
                         }
                     }
                 }
-                
-                Spacer(Modifier.height(32.dp))
-                
-                Text(
-                    text = "Healthitt",
-                    fontSize = 56.sp,
-                    fontWeight = FontWeight.Black,
-                    style = LocalTextStyle.current.copy(
-                        brush = Brush.horizontalGradient(ActiveGradient)
-                    ),
-                    letterSpacing = (-2).sp
-                )
-                Text(
-                    text = "Your Health, Evolved",
-                    fontSize = 14.sp,
-                    color = PureWhite.copy(0.6f),
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 2.sp
-                )
             }
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.alpha(contentAlpha)) {
-                Text(
-                    text = "Track steps, food, and sleep easily.\nAll your health data in one place.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = PureWhite.copy(0.4f),
-                    textAlign = TextAlign.Center,
-                    lineHeight = 28.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+            Spacer(Modifier.height(48.dp))
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(bottom = 60.dp).alpha(contentAlpha)) {
-                Button(
-                    onClick = onNavigateToLogin,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                    shape = RoundedCornerShape(20.dp),
-                    contentPadding = PaddingValues(0.dp)
+            // --- TYPOGRAPHY BLOCK ---
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                AnimatedVisibility(
+                    visible = stage >= 2,
+                    enter = fadeIn() + slideInVertically(initialOffsetY = { -20 })
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Brush.horizontalGradient(ActiveGradient)),
-                        contentAlignment = Alignment.Center
+                    Text(
+                        text = "HEALTHITT",
+                        fontSize = 62.sp,
+                        fontWeight = FontWeight.Black,
+                        style = LocalTextStyle.current.copy(
+                            brush = Brush.horizontalGradient(ActiveGradient)
+                        ),
+                        letterSpacing = (-3).sp
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = stage >= 3,
+                    enter = expandHorizontally(expandFrom = Alignment.CenterHorizontally) + fadeIn()
+                ) {
+                    Surface(
+                        color = NeonGreen.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.padding(top = 8.dp)
                     ) {
-                        Text("Get Started", color = NightDark, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text(
+                            text = " Your Personal Fitness Assistant ",
+                            fontSize = 10.sp,
+                            color = NeonGreen,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            letterSpacing = 2.sp
+                        )
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(modifier = Modifier.size(6.dp), shape = CircleShape, color = NeonGreen) {}
-                    Spacer(Modifier.width(12.dp))
-                    Text("Secure & Private", color = PureWhite.copy(0.3f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(Modifier.weight(0.5f))
+
+            // --- ACTION LAYER ---
+            AnimatedVisibility(
+                visible = stage >= 4,
+                enter = fadeIn(tween(1200)) + slideInVertically(initialOffsetY = { 50 })
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Unlock your metabolic potential with a clean modern dashboard and a high-performance community.",
+                        color = PureWhite.copy(0.5f),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Spacer(Modifier.height(32.dp))
+
+                    Button(
+                        onClick = onNavigateToLogin,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp)
+                            .drawWithContent {
+                                drawContent()
+                                // Subtle border glow
+                                drawRoundRect(
+                                    brush = Brush.sweepGradient(listOf(NeonGreen, NeonCyan, NeonGreen)),
+                                    size = size,
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(22.dp.toPx()),
+                                    style = Stroke(width = 2f),
+                                    alpha = 0.5f
+                                )
+                            },
+                        colors = ButtonDefaults.buttonColors(containerColor = NightDark),
+                        shape = RoundedCornerShape(22.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "Start Your Journey",
+                                color = NeonGreen, 
+                                fontWeight = FontWeight.Black, 
+                                fontSize = 16.sp, 
+                                letterSpacing = 2.sp
+                            )
+                        }
+                    }
                 }
             }
+            
+            Spacer(Modifier.height(40.dp))
         }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun WelcomeScreenPreview() {
-    HealthittTheme {
-        WelcomeScreen(onNavigateToLogin = {})
     }
 }

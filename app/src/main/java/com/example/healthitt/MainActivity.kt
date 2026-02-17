@@ -206,12 +206,13 @@ fun HealthittApp() {
             }
             composable("register") {
                 RegisterScreen(
-                    onRegisterClicked = { name, dob, weight, height, gender, email, phone, password ->
+                    onRegisterClicked = { name, dob, weight, height, gender, email, phone, password, avatarUrl ->
                         scope.launch {
                             val userId = email.replace(".", "_")
                             val newUser = User(
                                 name = name, dob = dob, weight = weight, height = height, 
-                                gender = gender, email = email, phone = phone, password = password
+                                gender = gender, email = email, phone = phone, password = password,
+                                profilePicUrl = avatarUrl
                             )
                             try {
                                 usersRef.child(userId).setValue(newUser).await()

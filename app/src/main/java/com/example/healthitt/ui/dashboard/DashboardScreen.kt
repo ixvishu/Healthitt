@@ -9,10 +9,12 @@ import android.app.PendingIntent
 import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.os.Build
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -32,8 +34,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Assignment
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.Segment
-import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +50,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.example.healthitt.data.Medication
 import com.example.healthitt.data.User
 import com.example.healthitt.health.BleWatchManager
@@ -66,7 +69,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-const val CURRENT_APP_VERSION = "4.2.5"
+const val CURRENT_APP_VERSION = "4.2.6"
 
 @Composable
 fun DashboardScreen(
@@ -154,6 +157,20 @@ fun DashboardScreen(
         }
     }
 
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            try {
+                cameraLauncher.launch(null)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error launching camera", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "Camera permission is required to scan food.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun hapticFeedback() { view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
 
     LaunchedEffect(Unit) {
@@ -236,7 +253,18 @@ fun DashboardScreen(
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                NutriScanBanner(mainTextColor) { hapticFeedback(); cameraLauncher.launch(null) }
+                NutriScanBanner(mainTextColor) { 
+                    hapticFeedback()
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                        try {
+                            cameraLauncher.launch(null)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Error launching camera", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
                 
