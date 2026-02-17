@@ -288,7 +288,11 @@ fun VitalityPowerMeter(steps: Int, water: Int, sleep: Float, textColor: Color) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Column {
                     Text("VITALITY POWER", color = EmeraldPrimary, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                    Text("$totalScore%", color = textColor, fontSize = 42.sp, fontWeight = FontWeight.Black)
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("$totalScore%", color = textColor, fontSize = 42.sp, fontWeight = FontWeight.Black)
+                        Spacer(Modifier.width(12.dp))
+                        Text("${steps} STEPS", color = textColor.copy(alpha = 0.4f), fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                    }
                 }
                 Icon(Icons.Rounded.Bolt, null, tint = AmberAccent, modifier = Modifier.size(48.dp).scale(1.2f))
             }

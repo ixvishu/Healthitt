@@ -50,44 +50,46 @@ data class User(
     var medicationsJson: String? = null
 ) {
     /**
-     * Safely returns medications as a list.
+     * Property that returns medications as a list.
      * Handles cases where medications might be stored in 'medications' (Firebase)
      * or 'medicationsJson' (Room).
+     *
+     * This derived property has a custom getter to avoid JVM signature clashes
+     * with an explicit 'getMedicationsList' function.
      */
     @get:Exclude
-    val medicationsList: List<Medication>
-        get() {
-            // First check medicationsJson (local/Room data)
-            if (medicationsJson != null) {
-                try {
-                    val type = object : TypeToken<List<Medication>>() {}.type
-                    return Gson().fromJson(medicationsJson, type) ?: emptyList()
-                } catch (e: Exception) {
-                    // Fall through to medications
-                }
+    val medicationsList: List<Medication> get() {
+        // First check medicationsJson (local/Room data)
+        if (medicationsJson != null) {
+            try {
+                val type = object : TypeToken<List<Medication>>() {}.type
+                return Gson().fromJson(medicationsJson, type) ?: emptyList()
+            } catch (e: Exception) {
+                // Fall through to medications
             }
-
-            // Then check medications (Firebase data)
-            if (medications == null) return emptyList()
-            
-            if (medications is List<*>) {
-                return (medications as List<*>).mapNotNull { item ->
-                    if (item is Map<*, *>) {
-                        mapToMedication(item as Map<String, Any>)
-                    } else null
-                }
-            }
-            
-            if (medications is Map<*, *>) {
-                return (medications as Map<*, *>).values.mapNotNull { item ->
-                    if (item is Map<*, *>) {
-                        mapToMedication(item as Map<String, Any>)
-                    } else null
-                }
-            }
-            
-            return emptyList()
         }
+
+        // Then check medications (Firebase data)
+        val currentMeds = medications ?: return emptyList()
+        
+        if (currentMeds is List<*>) {
+            return currentMeds.mapNotNull { item ->
+                if (item is Map<*, *>) {
+                    mapToMedication(item as Map<String, Any>)
+                } else null
+            }
+        }
+        
+        if (currentMeds is Map<*, *>) {
+            return currentMeds.values.mapNotNull { item ->
+                if (item is Map<*, *>) {
+                    mapToMedication(item as Map<String, Any>)
+                } else null
+            }
+        }
+        
+        return emptyList()
+    }
 
     private fun mapToMedication(map: Map<String, Any>): Medication {
         return Medication(

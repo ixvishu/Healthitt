@@ -28,12 +28,11 @@ import com.example.healthitt.notifications.NotificationScheduler
 import com.example.healthitt.services.StepCounterService
 import com.example.healthitt.ui.auth.LoginScreen
 import com.example.healthitt.ui.auth.RegisterScreen
-import com.example.healthitt.ui.dashboard.DashboardScreen
-import com.example.healthitt.ui.homescreen.WelcomeScreen
+import com.example.healthitt.ui.theme.HealthittTheme
+import com.example.healthitt.ui.main.MainScreen
 import com.example.healthitt.ui.workout.WorkoutScreen
 import com.example.healthitt.ui.bmi.BMIScreen
 import com.example.healthitt.ui.todo.TodoScreen
-import com.example.healthitt.ui.theme.HealthittTheme
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
@@ -60,6 +59,7 @@ fun HealthittApp() {
     
     var savedEmail by remember { mutableStateOf(sharedPrefs.getString("logged_in_email", null)) }
     var isDarkMode by remember { mutableStateOf(true) }
+    var userName by remember { mutableStateOf(sharedPrefs.getString("logged_in_name", "Athlete") ?: "Athlete") }
     
     val database = Firebase.database("https://healthitt-d5055-default-rtdb.firebaseio.com/").reference
 
@@ -71,34 +71,36 @@ fun HealthittApp() {
         }
     }
 
-    // Sync Theme Preference from Firebase
+    // Sync Theme Preference and Name from Firebase
     DisposableEffect(savedEmail) {
-        var themeRef: com.google.firebase.database.DatabaseReference? = null
+        var userRef: com.google.firebase.database.DatabaseReference? = null
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                isDarkMode = snapshot.getValue(Boolean::class.java) ?: true
+                isDarkMode = snapshot.child("isDarkMode").getValue(Boolean::class.java) ?: true
+                userName = snapshot.child("name").getValue(String::class.java) ?: "Athlete"
+                sharedPrefs.edit().putString("logged_in_name", userName).apply()
             }
             override fun onCancelled(error: DatabaseError) {
-                Log.e("Firebase", "Theme Sync Error: ${error.message}")
+                Log.e("Firebase", "Sync Error: ${error.message}")
             }
         }
         
         if (savedEmail != null) {
             val userEmailKey = savedEmail!!.replace(".", "_")
-            themeRef = database.child("users").child(userEmailKey).child("isDarkMode")
-            themeRef.addValueEventListener(listener)
+            userRef = database.child("users").child(userEmailKey)
+            userRef.addValueEventListener(listener)
         } else {
             isDarkMode = true 
         }
         
         onDispose {
-            themeRef?.removeEventListener(listener)
+            userRef?.removeEventListener(listener)
         }
     }
 
     HealthittTheme(darkTheme = isDarkMode) {
         val navController = rememberNavController()
-        val startDestination = if (savedEmail != null) "dashboard/$savedEmail" else "welcome"
+        val startDestination = if (savedEmail != null) "main/$savedEmail" else "welcome"
 
         fun startStepService(email: String) {
             val serviceIntent = Intent(context, StepCounterService::class.java).apply {
@@ -159,7 +161,7 @@ fun HealthittApp() {
             modifier = Modifier.fillMaxSize()
         ) {
             composable("welcome") {
-                WelcomeScreen(onNavigateToLogin = { navController.navigate("login") })
+                com.example.healthitt.ui.homescreen.WelcomeScreen(onNavigateToLogin = { navController.navigate("login") })
             }
             composable("login") {
                 LoginScreen(
@@ -177,9 +179,13 @@ fun HealthittApp() {
                                     }
                                 }
                                 if (loggedInUser != null) {
-                                    sharedPrefs.edit().putString("logged_in_email", loggedInUser.email).apply()
+                                    sharedPrefs.edit()
+                                        .putString("logged_in_email", loggedInUser.email)
+                                        .putString("logged_in_name", loggedInUser.name)
+                                        .apply()
                                     savedEmail = loggedInUser.email
-                                    navController.navigate("dashboard/${loggedInUser.email}") {
+                                    userName = loggedInUser.name
+                                    navController.navigate("main/${loggedInUser.email}") {
                                         popUpTo("welcome") { inclusive = true }
                                     }
                                 } else {
@@ -246,25 +252,24 @@ fun HealthittApp() {
                 )
             }
             composable(
-                route = "dashboard/{userEmail}",
+                route = "main/{userEmail}",
                 arguments = listOf(navArgument("userEmail") { type = NavType.StringType })
             ) { backStackEntry ->
                 val userEmailArg = backStackEntry.arguments?.getString("userEmail") ?: ""
-                DashboardScreen(
+                MainScreen(
+                    mainNavController = navController,
                     userEmail = userEmailArg,
-                    isDarkMode = isDarkMode, // Pass the theme state
-                    onThemeToggle = ::toggleDarkMode, // Pass the theme toggle function
+                    userName = userName,
+                    isDarkMode = isDarkMode,
+                    onThemeToggle = ::toggleDarkMode,
                     onLogout = {
                         context.stopService(Intent(context, StepCounterService::class.java))
-                        sharedPrefs.edit().remove("logged_in_email").apply()
+                        sharedPrefs.edit().remove("logged_in_email").remove("logged_in_name").apply()
                         savedEmail = null
                         navController.navigate("welcome") {
                             popUpTo(0) { inclusive = true }
                         }
-                    },
-                    onNavigateToWorkouts = { navController.navigate("workouts") },
-                    onNavigateToBMI = { navController.navigate("bmi/$userEmailArg") },
-                    onNavigateToTodo = { navController.navigate("todo/$userEmailArg") }
+                    }
                 )
             }
             composable("workouts") {
