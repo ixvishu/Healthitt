@@ -11,12 +11,12 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
+import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -41,7 +41,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -71,8 +70,10 @@ const val CURRENT_APP_VERSION = "4.2.5"
 @Composable
 fun DashboardScreen(
     userEmail: String, 
+    isDarkMode: Boolean,
+    onThemeToggle: (Boolean) -> Unit,
     onLogout: () -> Unit, 
-    onNavigateToWorkouts: (Boolean) -> Unit, 
+    onNavigateToWorkouts: () -> Unit, 
     onNavigateToBMI: () -> Unit,
     onNavigateToTodo: () -> Unit
 ) {
@@ -101,75 +102,74 @@ fun DashboardScreen(
     val userRef = database.child("users").child(userEmailKey)
     val dailyStatsRef = userRef.child("daily_stats").child(todayDate)
 
-    val isDarkModePref = user?.isDarkMode ?: true
+    val bgColor = MaterialTheme.colorScheme.background
+    val cardColor = MaterialTheme.colorScheme.surface
+    val mainTextColor = MaterialTheme.colorScheme.onBackground
 
-    HealthittTheme(darkTheme = isDarkModePref) {
-        val bgColor = MaterialTheme.colorScheme.background
-        val cardColor = MaterialTheme.colorScheme.surface
-        val mainTextColor = MaterialTheme.colorScheme.onBackground
+    var showAccountDetails by remember { mutableStateOf(false) }
+    var showWaterTracker by remember { mutableStateOf(false) }
+    var showMeditation by remember { mutableStateOf(false) }
+    var showSleepLog by remember { mutableStateOf(false) }
+    var showMedsReminder by remember { mutableStateOf(false) }
+    var showAboutApp by remember { mutableStateOf(false) }
+    var showHealthVault by remember { mutableStateOf(false) }
+    var showWatchConnect by remember { mutableStateOf(false) }
+    
+    var aiHealthTip by remember { mutableStateOf("Syncing your vitals...") }
+    var isAiLoading by remember { mutableStateOf(true) }
 
-        var showAccountDetails by remember { mutableStateOf(false) }
-        var showWaterTracker by remember { mutableStateOf(false) }
-        var showMeditation by remember { mutableStateOf(false) }
-        var showSleepLog by remember { mutableStateOf(false) }
-        var showMedsReminder by remember { mutableStateOf(false) }
-        var showAboutApp by remember { mutableStateOf(false) }
-        var showHealthVault by remember { mutableStateOf(false) }
-        var showWatchConnect by remember { mutableStateOf(false) }
+    val generativeModel = remember {
+        GenerativeModel(
+            modelName = "gemini-1.5-flash", 
+            apiKey = "AIzaSyBjr5NA9RL5ASEpbS3rmmSdvvZ_NLKHoA8", 
+            generationConfig = generationConfig { temperature = 0.7f }
+        )
+    }
+
+    fun analyzeFood(bitmap: Bitmap) {
+        isScanningFood = true
+        nutritionalResult = "Analyzing your meal..."
+        scope.launch {
+            try {
+                val scaledBitmap = Bitmap.createScaledBitmap(bitmap, 640, 480, true)
+                val response = generativeModel.generateContent(
+                    content {
+                        image(scaledBitmap)
+                        text("Brief nutritional analysis for this food. Calories, macros, and health rating. Concise.")
+                    }
+                )
+                nutritionalResult = response.text ?: "Detection uncertain."
+            } catch (e: Exception) {
+                nutritionalResult = "AI Offline: ${e.localizedMessage ?: "Check connection"}"
+            } finally { isScanningFood = false }
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        if (bitmap != null) {
+            capturedBitmap = bitmap
+            showNutriModal = true
+            analyzeFood(bitmap)
+        }
+    }
+
+    fun hapticFeedback() { view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
+
+    LaunchedEffect(Unit) {
+        scope.launch {
+            try {
+                val response = generativeModel.generateContent("Encouraging health quote for an athlete (max 10 words).")
+                aiHealthTip = response.text?.trim() ?: "Consistency is the key to progress."
+            } catch (_: Exception) { 
+                aiHealthTip = "Small habits build great results." 
+            } finally { 
+                isAiLoading = false 
+            }
+        }
         
-        var aiHealthTip by remember { mutableStateOf("Syncing your vitals...") }
-        var isAiLoading by remember { mutableStateOf(true) }
-
-        val generativeModel = remember {
-            GenerativeModel(
-                modelName = "gemini-1.5-flash", 
-                apiKey = "AIzaSyBjr5NA9RL5ASEpbS3rmmSdvvZ_NLKHoA8", 
-                generationConfig = generationConfig { temperature = 0.7f }
-            )
-        }
-
-        fun analyzeFood(bitmap: Bitmap) {
-            isScanningFood = true
-            nutritionalResult = "Analyzing your meal..."
-            scope.launch {
+        userRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
                 try {
-                    val response = generativeModel.generateContent(
-                        content {
-                            image(bitmap)
-                            text("Brief nutritional analysis for this food. Calories, macros, and health rating. Concise.")
-                        }
-                    )
-                    nutritionalResult = response.text ?: "Detection uncertain."
-                } catch (_: Exception) {
-                    nutritionalResult = "Network busy. Try again."
-                } finally { isScanningFood = false }
-            }
-        }
-
-        val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-            if (bitmap != null) {
-                capturedBitmap = bitmap
-                showNutriModal = true
-                analyzeFood(bitmap)
-            }
-        }
-
-        fun hapticFeedback() { view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
-
-        LaunchedEffect(Unit) {
-            scope.launch {
-                try {
-                    val response = generativeModel.generateContent("Encouraging health quote for an athlete (max 10 words).")
-                    aiHealthTip = response.text?.trim() ?: "Consistency is the key to progress."
-                } catch (_: Exception) { 
-                    aiHealthTip = "Small habits build great results." 
-                } finally { 
-                    isAiLoading = false 
-                }
-            }
-            
-            userRef.addValueEventListener(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
                     user = snapshot.getValue(User::class.java)
                     todaySteps = snapshot.child("daily_history").child(todayDate).getValue(Int::class.java) ?: 0
                     waterCount = snapshot.child("daily_stats").child(todayDate).child("water").getValue(Int::class.java) ?: 0
@@ -183,89 +183,91 @@ fun DashboardScreen(
                         currentMeds[name] = taken
                     }
                     medsStatus = currentMeds
-                }
-                override fun onCancelled(error: DatabaseError) {}
-            })
-        }
-
-        val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                ModalDrawerSheet(drawerContainerColor = cardColor, modifier = Modifier.width(300.dp)) {
-                    Column(modifier = Modifier.padding(24.dp).fillMaxHeight()) {
-                        Text("Healthitt", style = MaterialTheme.typography.headlineLarge, color = EmeraldPrimary, fontWeight = FontWeight.Bold)
-                        Text("Elite Performance Tracker", color = mainTextColor.copy(alpha = 0.4f), fontSize = 10.sp, letterSpacing = 2.sp)
-                        Spacer(Modifier.height(40.dp))
-                        
-                        DrawerItem("Identity", Icons.Rounded.Person) { hapticFeedback(); showAccountDetails = true; scope.launch { drawerState.close() } }
-                        DrawerItem("Link Wearable", Icons.Rounded.Bluetooth) { hapticFeedback(); showWatchConnect = true; scope.launch { drawerState.close() } }
-                        DrawerItem("Training", Icons.Rounded.FitnessCenter) { hapticFeedback(); onNavigateToWorkouts(isDarkModePref); scope.launch { drawerState.close() } }
-                        DrawerItem("Protocols", Icons.AutoMirrored.Rounded.Assignment) { hapticFeedback(); onNavigateToTodo(); scope.launch { drawerState.close() } }
-                        DrawerItem("Biometrics", Icons.Rounded.MonitorWeight) { hapticFeedback(); onNavigateToBMI(); scope.launch { drawerState.close() } }
-                        DrawerItem("Health Vault", Icons.Rounded.Https) { hapticFeedback(); showHealthVault = true; scope.launch { drawerState.close() } }
-                        
-                        Spacer(modifier = Modifier.height(24.dp))
-                        HorizontalDivider(color = mainTextColor.copy(alpha = 0.1f))
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        DrawerItem("About App", Icons.Rounded.Info) { hapticFeedback(); showAboutApp = true; scope.launch { drawerState.close() } }
-                        
-                        Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { userRef.child("isDarkMode").setValue(!isDarkModePref) }.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Dark Mode", color = mainTextColor, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                            Switch(checked = isDarkModePref, onCheckedChange = { userRef.child("isDarkMode").setValue(it) }, colors = SwitchDefaults.colors(checkedThumbColor = EmeraldPrimary))
-                        }
-                        Spacer(Modifier.weight(1f))
-                        DrawerItem("Sign Out", Icons.AutoMirrored.Rounded.Logout, RoseAccent) { onLogout() }
-                    }
+                } catch (e: Exception) {
+                    println("Error loading user data: ${e.message}")
                 }
             }
-        ) {
-            Scaffold(
-                containerColor = bgColor,
-                topBar = { DashboardHeader(user?.name ?: "Athlete", mainTextColor) { hapticFeedback(); scope.launch { drawerState.open() } } }
-            ) { padding ->
-                Column(modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-                    
-                    VitalityPowerMeter(todaySteps, waterCount, sleepHours, mainTextColor)
-                    
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    NutriScanBanner(mainTextColor) { hapticFeedback(); cameraLauncher.launch(null) }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    HealthTipBanner(aiHealthTip, isAiLoading, mainTextColor)
-                    
-                    if (watchConnectionState == "Connected") {
-                        Spacer(modifier = Modifier.height(24.dp))
-                        LiveWearableBanner(watchHeartRate, mainTextColor)
-                    }
-
-                    Spacer(modifier = Modifier.height(32.dp))
-                    Text("Vital Telemetry", color = mainTextColor, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    StatGrid(isDarkModePref, waterCount, sleepHours, medsStatus.values.count { it }, { showWaterTracker = true }, { showMeditation = true }, { showSleepLog = true }, { showMedsReminder = true })
-                    
-                    Spacer(modifier = Modifier.height(32.dp))
-                    DailyQuestBanner(mainTextColor)
-                    Spacer(modifier = Modifier.height(40.dp))
-                }
-            }
-        }
-
-        if (showNutriModal) NutriResultModal(capturedBitmap, nutritionalResult, isScanningFood, isDarkModePref, mainTextColor) { showNutriModal = false }
-        if (showWaterTracker) WaterTrackerModal(waterCount, { dailyStatsRef.child("water").setValue(it) }, isDarkModePref, mainTextColor) { showWaterTracker = false }
-        if (showSleepLog) SleepLogModal(sleepHours, { dailyStatsRef.child("sleep").setValue(it) }, isDarkModePref, mainTextColor) { showSleepLog = false }
-        if (showMedsReminder) MedicationManagerModal(user?.medications ?: emptyList(), medsStatus, { id, taken -> dailyStatsRef.child("meds_v2").child(id).setValue(taken) }, { newList -> userRef.child("medications").setValue(newList) }, isDarkModePref, mainTextColor) { showMedsReminder = false }
-        if (showMeditation) MeditationModal(isDarkModePref) { showMeditation = false }
-        if (showAccountDetails) ProfileDialog(user, userRef, isDarkModePref) { showAccountDetails = false }
-        if (showAboutApp) AboutDialog(isDarkModePref, mainTextColor) { showAboutApp = false }
-        if (showHealthVault) VaultDialog(user, userRef, isDarkModePref) { showHealthVault = false }
-        if (showWatchConnect) WatchDialog(bleManager, isDarkModePref, mainTextColor) { showWatchConnect = false }
+            override fun onCancelled(error: DatabaseError) {}
+        })
     }
+
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(drawerContainerColor = cardColor, modifier = Modifier.width(300.dp)) {
+                Column(modifier = Modifier.padding(24.dp).fillMaxHeight()) {
+                    Text("Healthitt", style = MaterialTheme.typography.headlineLarge, color = EmeraldPrimary, fontWeight = FontWeight.Bold)
+                    Text("Elite Performance Tracker", color = mainTextColor.copy(alpha = 0.4f), fontSize = 10.sp, letterSpacing = 2.sp)
+                    Spacer(Modifier.height(40.dp))
+                    
+                    DrawerItem("Identity", Icons.Rounded.Person) { hapticFeedback(); showAccountDetails = true; scope.launch { drawerState.close() } }
+                    DrawerItem("Link Wearable", Icons.Rounded.Bluetooth) { hapticFeedback(); showWatchConnect = true; scope.launch { drawerState.close() } }
+                    DrawerItem("Training", Icons.Rounded.FitnessCenter) { hapticFeedback(); onNavigateToWorkouts(); scope.launch { drawerState.close() } }
+                    DrawerItem("Protocols", Icons.AutoMirrored.Rounded.Assignment) { hapticFeedback(); onNavigateToTodo(); scope.launch { drawerState.close() } }
+                    DrawerItem("Biometrics", Icons.Rounded.MonitorWeight) { hapticFeedback(); onNavigateToBMI(); scope.launch { drawerState.close() } }
+                    DrawerItem("Health Vault", Icons.Rounded.Https) { hapticFeedback(); showHealthVault = true; scope.launch { drawerState.close() } }
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    HorizontalDivider(color = mainTextColor.copy(alpha = 0.1f))
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    DrawerItem("About App", Icons.Rounded.Info) { hapticFeedback(); showAboutApp = true; scope.launch { drawerState.close() } }
+                    
+                    Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onThemeToggle(!isDarkMode) }.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Dark Mode", color = mainTextColor, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                        Switch(checked = isDarkMode, onCheckedChange = { onThemeToggle(it) }, colors = SwitchDefaults.colors(checkedThumbColor = EmeraldPrimary))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    DrawerItem("Sign Out", Icons.AutoMirrored.Rounded.Logout, RoseAccent) { onLogout() }
+                }
+            }
+        }
+    ) {
+        Scaffold(
+            containerColor = bgColor,
+            topBar = { DashboardHeader(user?.name ?: "Athlete", mainTextColor) { hapticFeedback(); scope.launch { drawerState.open() } } }
+        ) { padding ->
+            Column(modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+                
+                VitalityPowerMeter(todaySteps, waterCount, sleepHours, mainTextColor)
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                NutriScanBanner(mainTextColor) { hapticFeedback(); cameraLauncher.launch(null) }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                HealthTipBanner(aiHealthTip, isAiLoading, mainTextColor)
+                
+                if (watchConnectionState == "Connected") {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    LiveWearableBanner(watchHeartRate, mainTextColor)
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+                Text("Vital Telemetry", color = mainTextColor, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                StatGrid(isDarkMode, waterCount, sleepHours, medsStatus.values.count { it }, { showWaterTracker = true }, { showMeditation = true }, { showSleepLog = true }, { showMedsReminder = true })
+                
+                Spacer(modifier = Modifier.height(32.dp))
+                DailyQuestBanner(mainTextColor)
+                Spacer(modifier = Modifier.height(40.dp))
+            }
+        }
+    }
+
+    if (showNutriModal) NutriResultModal(capturedBitmap, nutritionalResult, isScanningFood, isDarkMode, mainTextColor) { showNutriModal = false }
+    if (showWaterTracker) WaterTrackerModal(waterCount, { dailyStatsRef.child("water").setValue(it) }, isDarkMode, mainTextColor) { showWaterTracker = false }
+    if (showSleepLog) SleepLogModal(sleepHours, { dailyStatsRef.child("sleep").setValue(it) }, isDarkMode, mainTextColor) { showSleepLog = false }
+    if (showMedsReminder) MedicationManagerModal(user?.medicationsList ?: emptyList(), medsStatus, { id, taken -> dailyStatsRef.child("meds_v2").child(id).setValue(taken) }, { newList -> userRef.child("medications").setValue(newList) }, isDarkMode, mainTextColor) { showMedsReminder = false }
+    if (showMeditation) MeditationModal(isDarkMode) { showMeditation = false }
+    if (showAccountDetails) ProfileDialog(user, userRef, isDarkMode) { showAccountDetails = false }
+    if (showAboutApp) AboutDialog(isDarkMode, mainTextColor) { showAboutApp = false }
+    if (showHealthVault) VaultDialog(user, userRef, isDarkMode) { showHealthVault = false }
+    if (showWatchConnect) WatchDialog(bleManager, isDarkMode, mainTextColor) { showWatchConnect = false }
 }
 
 @Composable
@@ -365,6 +367,18 @@ fun MedicationManagerModal(
     var editingMed by remember { mutableStateOf<Medication?>(null) }
     val context = LocalContext.current
 
+    fun handleSave(med: Medication) {
+        val newList = if (editingMed != null) {
+            medications.map { if (it.id == med.id) med else it }
+        } else {
+            medications + med
+        }
+        if (med.isEnabled) scheduleMedicationAlarm(context, med)
+        onUpdateMedsList(newList)
+        isAdding = false
+        editingMed = null
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
@@ -419,13 +433,7 @@ fun MedicationManagerModal(
     if (isAdding || editingMed != null) {
         MedicationEditorDialog(
             initialMed = editingMed,
-            onSave = { med ->
-                val newList = if(editingMed != null) medications.map { if(it.id == med.id) med else it } else medications + med
-                if (med.isEnabled) scheduleMedicationAlarm(context, med)
-                onUpdateMedsList(newList)
-                isAdding = false
-                editingMed = null
-            },
+            onSave = ::handleSave,
             onDismiss = { isAdding = false; editingMed = null },
             isDarkMode = isDarkMode
         )
@@ -525,6 +533,14 @@ fun MedicationEditorDialog(
 @SuppressLint("ScheduleExactAlarm")
 fun scheduleMedicationAlarm(context: Context, med: Medication) {
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+        Intent().also { intent ->
+            intent.action = Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM
+            context.startActivity(intent)
+        }
+        return
+    }
+
     val intent = Intent(context, MedicationReceiver::class.java).apply {
         putExtra("med_name", med.name)
         putExtra("med_id", med.id)
@@ -539,11 +555,7 @@ fun scheduleMedicationAlarm(context: Context, med: Medication) {
         if (before(Calendar.getInstance())) add(Calendar.DATE, 1)
     }
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
-    } else {
-        alarmManager.setExact(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
-    }
+    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
 }
 
 fun cancelMedicationAlarm(context: Context, med: Medication) {
@@ -737,15 +749,43 @@ fun SleepLogModal(hours: Float, onUpdate: (Float) -> Unit, isDarkMode: Boolean, 
 @Composable
 fun MeditationModal(isDarkMode: Boolean, onDismiss: () -> Unit) {
     var active by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    val infiniteTransition = rememberInfiniteTransition(label = "zen_pulse_transition")
+
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = if (active) 1.2f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "zen_pulse_scale"
+    )
+
+    val color by animateColorAsState(
+        targetValue = if (active) RoseAccent else EmeraldPrimary,
+        animationSpec = tween(1500),
+        label = "zen_pulse_color"
+    )
+
+    val text = if (active) "Exhaling..." else "Start Session"
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text("Zen Pulse", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(Modifier.height(32.dp))
-                Icon(Icons.Rounded.SelfImprovement, null, tint = EmeraldPrimary, modifier = Modifier.size(80.dp).scale(if(active) 1.2f else 1.0f))
+                Icon(Icons.Rounded.SelfImprovement, null, tint = color, modifier = Modifier.size(80.dp).scale(scale))
                 Spacer(Modifier.height(32.dp))
-                Button(onClick = { active = !active }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = if(active) RoseAccent else EmeraldPrimary)) {
-                    Text(if(active) "Exhaling..." else "Start Session")
+                Button(
+                    onClick = { active = !active },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = color)
+                ) {
+                    Text(text)
                 }
             }
         }

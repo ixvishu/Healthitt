@@ -39,10 +39,15 @@ class BleWatchManager(private val context: Context) {
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val device = result.device
-            // Only add devices that have a name or specific health services
-            if (device.name != null && !foundDevices.value.any { it.address == device.address }) {
-                _foundDevices.value = _foundDevices.value + device
-                Log.d("BleWatchManager", "Found device: ${device.name} at ${device.address}")
+            try {
+                // Safely access device name
+                val name = device.name
+                if (name != null && !foundDevices.value.any { it.address == device.address }) {
+                    _foundDevices.value = _foundDevices.value + device
+                    Log.d("BleWatchManager", "Found device: $name at ${device.address}")
+                }
+            } catch (e: SecurityException) {
+                Log.e("BleWatchManager", "SecurityException during scan: ${e.message}")
             }
         }
 
@@ -63,7 +68,9 @@ class BleWatchManager(private val context: Context) {
 
     fun stopDiscovery() {
         Log.d("BleWatchManager", "Stopping BLE Scan")
-        bluetoothAdapter?.bluetoothLeScanner?.stopScan(scanCallback)
+        try {
+            bluetoothAdapter?.bluetoothLeScanner?.stopScan(scanCallback)
+        } catch (_: Exception) {}
     }
 
     private val gattCallback = object : BluetoothGattCallback() {

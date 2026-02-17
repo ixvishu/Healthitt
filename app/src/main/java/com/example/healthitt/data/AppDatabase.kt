@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(entities = [User::class], version = 1, exportSchema = false)
-@TypeConverters(Converters::class)
+@TypeConverters(Converters::class) // Removed MedicationListConverter as it's no longer needed
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
 

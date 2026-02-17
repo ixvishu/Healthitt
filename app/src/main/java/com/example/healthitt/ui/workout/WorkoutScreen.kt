@@ -132,7 +132,7 @@ val workoutData = listOf(
     Workout(80, "Dumbbell Twist Curl", "Biceps", "Beginner", "Peak contraction.", "Rotate palms up as you curl dumbbells.", "3 Sets", "12 Reps", 65, "db_twist_curl"),
 
     // TRICEPS (20)
-    Workout(81, "Skull Crushers", "Triceps", "Intermediate", "Long head mass.", "Lower EZ-bar to forehead, extend arms.", "3 Sets", "12 Reps", 80, "skull_crushers"),
+    Workout(81, "Skull Crushers", "Triceps", "Intermediate", "Long head mass.", "Lower EZ-bar to forehead, extend arms.", "3 Sets", "12 Reps", 80, "skull_curushers"),
     Workout(82, "Tricep Pushdowns", "Triceps", "Beginner", "Tricep isolation.", "Push cable bar down to thighs.", "3 Sets", "15 Reps", 60, "tricep_pushdowns"),
     Workout(83, "Close Grip Bench", "Triceps", "Intermediate", "Power compound.", "Press bar with hands shoulder-width.", "4 Sets", "10 Reps", 110, "close_grip_bench"),
     Workout(84, "Overhead DB Ext", "Triceps", "Beginner", "Tricep stretch.", "Press dumbbell above head behind neck.", "3 Sets", "12 Reps", 75, "overhead_db_ext"),
@@ -222,12 +222,12 @@ val workoutData = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WorkoutScreen(isDarkMode: Boolean, onBack: () -> Unit) {
+fun WorkoutScreen(onBack: () -> Unit) {
     var selectedMuscle by remember { mutableStateOf("All") }
     var selectedWorkout by remember { mutableStateOf<Workout?>(null) }
     
-    val bgColor = if (isDarkMode) DeepSlate else Color(0xFFF8FAFC)
-    val mainTextColor = if (isDarkMode) PureWhite else DeepSlate
+    val bgColor = MaterialTheme.colorScheme.background
+    val mainTextColor = MaterialTheme.colorScheme.onBackground
     val secondaryTextColor = mainTextColor.copy(alpha = 0.6f)
 
     val muscles = listOf("All", "Chest", "Back", "Shoulders", "Biceps", "Triceps", "Legs", "Abs", "Forearms")
@@ -260,10 +260,10 @@ fun WorkoutScreen(isDarkMode: Boolean, onBack: () -> Unit) {
                         label = { Text(muscle, fontWeight = FontWeight.Bold) },
                         shape = RoundedCornerShape(14.dp),
                         colors = FilterChipDefaults.filterChipColors(
-                            containerColor = if(isDarkMode) MutedSlate else PureWhite,
+                            containerColor = MaterialTheme.colorScheme.surface,
                             labelColor = secondaryTextColor,
                             selectedContainerColor = EmeraldPrimary,
-                            selectedLabelColor = PureWhite
+                            selectedLabelColor = Color.White
                         ),
                         border = FilterChipDefaults.filterChipBorder(
                             enabled = true,
@@ -282,24 +282,24 @@ fun WorkoutScreen(isDarkMode: Boolean, onBack: () -> Unit) {
                 contentPadding = PaddingValues(bottom = 32.dp)
             ) {
                 items(filteredWorkouts) { workout ->
-                    WorkoutPremiumCard(workout, isDarkMode, mainTextColor) { selectedWorkout = workout }
+                    WorkoutPremiumCard(workout, mainTextColor) { selectedWorkout = workout }
                 }
             }
         }
     }
 
     if (selectedWorkout != null) {
-        WorkoutDetailModal(workout = selectedWorkout!!, isDarkMode, mainTextColor) { selectedWorkout = null }
+        WorkoutDetailModal(workout = selectedWorkout!!, mainTextColor) { selectedWorkout = null }
     }
 }
 
 @Composable
-fun WorkoutPremiumCard(workout: Workout, isDarkMode: Boolean, textColor: Color, onClick: () -> Unit) {
+fun WorkoutPremiumCard(workout: Workout, textColor: Color, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
-        color = if (isDarkMode) MutedSlate else PureWhite,
+        color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, textColor.copy(0.05f))
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -344,10 +344,10 @@ fun DifficultyTag(difficulty: String) {
 }
 
 @Composable
-fun WorkoutDetailModal(workout: Workout, isDarkMode: Boolean, textColor: Color, onDismiss: () -> Unit) {
+fun WorkoutDetailModal(workout: Workout, textColor: Color, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = if (isDarkMode) MutedSlate else PureWhite,
+        containerColor = MaterialTheme.colorScheme.surface,
         confirmButton = {
             Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary), shape = RoundedCornerShape(12.dp)) {
                 Text("DONE", fontWeight = FontWeight.Black)

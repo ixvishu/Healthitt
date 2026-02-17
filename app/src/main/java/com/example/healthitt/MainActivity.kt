@@ -3,8 +3,10 @@ package com.example.healthitt
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -31,6 +34,9 @@ import com.example.healthitt.ui.workout.WorkoutScreen
 import com.example.healthitt.ui.bmi.BMIScreen
 import com.example.healthitt.ui.todo.TodoScreen
 import com.example.healthitt.ui.theme.HealthittTheme
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
@@ -41,192 +47,243 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            HealthittTheme {
-                HealthittApp()
-            }
+            HealthittApp()
         }
     }
 }
 
 @Composable
 fun HealthittApp() {
-    val navController = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sharedPrefs = remember { context.getSharedPreferences("healthitt_prefs", Context.MODE_PRIVATE) }
     
-    val savedEmail = remember { sharedPrefs.getString("logged_in_email", null) }
-    val startDestination = if (savedEmail != null) "dashboard/$savedEmail" else "welcome"
+    var savedEmail by remember { mutableStateOf(sharedPrefs.getString("logged_in_email", null)) }
+    var isDarkMode by remember { mutableStateOf(true) }
+    
+    val database = Firebase.database("https://healthitt-d5055-default-rtdb.firebaseio.com/").reference
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val activityGranted = permissions[Manifest.permission.ACTIVITY_RECOGNITION] ?: false
-            if (!activityGranted) {
-                Toast.makeText(context, "Activity permission required for steps", Toast.LENGTH_SHORT).show()
-            }
+    fun toggleDarkMode(newThemeValue: Boolean) {
+        isDarkMode = newThemeValue
+        savedEmail?.let {
+            val userEmailKey = it.replace(".", "_")
+            database.child("users").child(userEmailKey).child("isDarkMode").setValue(newThemeValue)
         }
     }
 
-    LaunchedEffect(Unit) {
-        val permissions = mutableListOf<String>()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            permissions.add(Manifest.permission.ACTIVITY_RECOGNITION)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+    // Sync Theme Preference from Firebase
+    DisposableEffect(savedEmail) {
+        var themeRef: com.google.firebase.database.DatabaseReference? = null
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                isDarkMode = snapshot.getValue(Boolean::class.java) ?: true
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("Firebase", "Theme Sync Error: ${error.message}")
+            }
         }
         
-        if (permissions.isNotEmpty()) {
-            permissionLauncher.launch(permissions.toTypedArray())
+        if (savedEmail != null) {
+            val userEmailKey = savedEmail!!.replace(".", "_")
+            themeRef = database.child("users").child(userEmailKey).child("isDarkMode")
+            themeRef.addValueEventListener(listener)
+        } else {
+            isDarkMode = true 
         }
+        
+        onDispose {
+            themeRef?.removeEventListener(listener)
+        }
+    }
 
-        NotificationScheduler.scheduleDailyWellnessReminders(context)
+    HealthittTheme(darkTheme = isDarkMode) {
+        val navController = rememberNavController()
+        val startDestination = if (savedEmail != null) "dashboard/$savedEmail" else "welcome"
 
-        savedEmail?.let { email ->
+        fun startStepService(email: String) {
             val serviceIntent = Intent(context, StepCounterService::class.java).apply {
                 putExtra("user_email", email)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent)
-            } else {
-                context.startService(serviceIntent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
-    }
 
-    val database = Firebase.database("https://healthitt-d5055-default-rtdb.firebaseio.com/").reference.child("users")
-    
-    NavHost(
-        navController = navController,
-        startDestination = startDestination,
-        modifier = Modifier.fillMaxSize()
-    ) {
-        composable("welcome") {
-            WelcomeScreen(onNavigateToLogin = { navController.navigate("login") })
-        }
-        composable("login") {
-            LoginScreen(
-                onLoginClicked = { emailOrPhone, password ->
-                    scope.launch {
-                        try {
-                            val snapshot = database.get().await()
-                            var loggedInUser: User? = null
-                            for (userSnapshot in snapshot.children) {
-                                val user = userSnapshot.getValue(User::class.java)
-                                if (user != null && (user.email == emailOrPhone || user.phone == emailOrPhone) && user.password == password) {
-                                    loggedInUser = user
-                                    break
-                                }
-                            }
-                            if (loggedInUser != null) {
-                                sharedPrefs.edit().putString("logged_in_email", loggedInUser.email).apply()
-                                
-                                val serviceIntent = Intent(context, StepCounterService::class.java).apply {
-                                    putExtra("user_email", loggedInUser.email)
-                                }
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    context.startForegroundService(serviceIntent)
-                                } else {
-                                    context.startService(serviceIntent)
-                                }
+        val permissionLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { perms ->
+            val activityGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                perms[Manifest.permission.ACTIVITY_RECOGNITION] ?: false
+            } else true
 
-                                navController.navigate("dashboard/${loggedInUser.email}") {
-                                    popUpTo("welcome") { inclusive = true }
-                                }
-                            } else {
-                                Toast.makeText(context, "Login failed. Check credentials.", Toast.LENGTH_SHORT).show()
-                            }
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                },
-                onNavigateToRegister = { navController.navigate("register") }
-            )
+            if (activityGranted) {
+                savedEmail?.let { startStepService(it) }
+            }
         }
-        composable("register") {
-            RegisterScreen(
-                onRegisterClicked = { name, dob, weight, height, gender, email, phone, password ->
-                    scope.launch {
-                        val userId = email.replace(".", "_")
-                        val newUser = User(
-                            name = name, dob = dob, weight = weight, height = height, 
-                            gender = gender, email = email, phone = phone, password = password
-                        )
-                        try {
-                            database.child(userId).setValue(newUser).await()
-                            Toast.makeText(context, "Registration Successful!", Toast.LENGTH_SHORT).show()
-                            navController.navigate("login")
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Registration failed: ${e.message}", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                },
-                onNavigateToLogin = { navController.popBackStack() },
-                checkUniqueness = { email, phone, callback ->
-                    scope.launch {
-                        try {
-                            val snapshot = database.get().await()
-                            var emailExists = false
-                            var phoneExists = false
-                            for (userSnapshot in snapshot.children) {
-                                val user = userSnapshot.getValue(User::class.java)
-                                if (user?.email == email) emailExists = true
-                                if (user?.phone == phone) phoneExists = true
-                            }
-                            when {
-                                emailExists -> callback(false, "Email already exists")
-                                phoneExists -> callback(false, "Phone already exists")
-                                else -> callback(true, null)
-                            }
-                        } catch (e: Exception) {
-                            callback(false, "Error: ${e.message}")
-                        }
+
+        LaunchedEffect(savedEmail) {
+            NotificationScheduler.scheduleDailyWellnessReminders(context)
+            
+            if (savedEmail != null) {
+                val permissions = mutableListOf<String>()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
+                        permissions.add(Manifest.permission.ACTIVITY_RECOGNITION)
                     }
                 }
-            )
-        }
-        composable(
-            route = "dashboard/{userEmail}",
-            arguments = listOf(navArgument("userEmail") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val userEmail = backStackEntry.arguments?.getString("userEmail") ?: ""
-            DashboardScreen(
-                userEmail = userEmail,
-                onLogout = {
-                    context.stopService(Intent(context, StepCounterService::class.java))
-                    sharedPrefs.edit().remove("logged_in_email").apply()
-                    navController.navigate("welcome") {
-                        popUpTo(0) { inclusive = true }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        permissions.add(Manifest.permission.POST_NOTIFICATIONS)
                     }
-                },
-                onNavigateToWorkouts = { isDark -> navController.navigate("workouts/$isDark") },
-                onNavigateToBMI = { navController.navigate("bmi/$userEmail") },
-                onNavigateToTodo = { navController.navigate("todo/$userEmail") }
-            )
+                }
+
+                if (permissions.isNotEmpty()) {
+                    permissionLauncher.launch(permissions.toTypedArray())
+                } else {
+                    startStepService(savedEmail!!)
+                }
+            }
         }
-        composable(
-            route = "workouts/{isDarkMode}",
-            arguments = listOf(navArgument("isDarkMode") { type = NavType.BoolType })
-        ) { backStackEntry ->
-            val isDark = backStackEntry.arguments?.getBoolean("isDarkMode") ?: true
-            WorkoutScreen(isDarkMode = isDark, onBack = { navController.popBackStack() })
-        }
-        composable(
-            route = "bmi/{userEmail}",
-            arguments = listOf(navArgument("userEmail") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val userEmail = backStackEntry.arguments?.getString("userEmail") ?: ""
-            BMIScreen(userEmail = userEmail, onBack = { navController.popBackStack() })
-        }
-        composable(
-            route = "todo/{userEmail}",
-            arguments = listOf(navArgument("userEmail") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val userEmail = backStackEntry.arguments?.getString("userEmail") ?: ""
-            TodoScreen(userEmail = userEmail, onBack = { navController.popBackStack() })
+
+        val usersRef = database.child("users")
+        
+        NavHost(
+            navController = navController,
+            startDestination = startDestination,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            composable("welcome") {
+                WelcomeScreen(onNavigateToLogin = { navController.navigate("login") })
+            }
+            composable("login") {
+                LoginScreen(
+                    onLoginClicked = { emailOrPhone, password ->
+                        scope.launch {
+                            try {
+                                val snapshot = usersRef.get().await()
+                                var loggedInUser: User? = null
+                                for (userSnapshot in snapshot.children) {
+                                    val user = try { userSnapshot.getValue(User::class.java) } catch(e: Exception) { null }
+
+                                    if (user != null && (user.email == emailOrPhone || user.phone == emailOrPhone) && user.password == password) {
+                                        loggedInUser = user
+                                        break
+                                    }
+                                }
+                                if (loggedInUser != null) {
+                                    sharedPrefs.edit().putString("logged_in_email", loggedInUser.email).apply()
+                                    savedEmail = loggedInUser.email
+                                    navController.navigate("dashboard/${loggedInUser.email}") {
+                                        popUpTo("welcome") { inclusive = true }
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Login failed. Check credentials.", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                val errorMsg = e.localizedMessage ?: "Unknown error"
+                                if (errorMsg.contains("Permission denied", ignoreCase = true)) {
+                                    Toast.makeText(context, "Permission Denied: Update Firebase Rules", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Login Error: $errorMsg", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    },
+                    onNavigateToRegister = { navController.navigate("register") }
+                )
+            }
+            composable("register") {
+                RegisterScreen(
+                    onRegisterClicked = { name, dob, weight, height, gender, email, phone, password ->
+                        scope.launch {
+                            val userId = email.replace(".", "_")
+                            val newUser = User(
+                                name = name, dob = dob, weight = weight, height = height, 
+                                gender = gender, email = email, phone = phone, password = password
+                            )
+                            try {
+                                usersRef.child(userId).setValue(newUser).await()
+                                Toast.makeText(context, "Registration Successful!", Toast.LENGTH_SHORT).show()
+                                navController.navigate("login")
+                            } catch (e: Exception) {
+                                val errorMsg = e.localizedMessage ?: "Unknown error"
+                                if (errorMsg.contains("Permission denied", ignoreCase = true)) {
+                                    Toast.makeText(context, "Cannot Create Profile: Check Firebase Write Rules", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Registration failed: $errorMsg", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    },
+                    onNavigateToLogin = { navController.popBackStack() },
+                    checkUniqueness = { email, phone, callback ->
+                        scope.launch {
+                            try {
+                                val snapshot = usersRef.get().await()
+                                var emailExists = false
+                                var phoneExists = false
+                                for (userSnapshot in snapshot.children) {
+                                    val user = try { userSnapshot.getValue(User::class.java) } catch(e: Exception) { null }
+                                    if (user?.email == email) emailExists = true
+                                    if (user?.phone == phone) phoneExists = true
+                                }
+                                when {
+                                    emailExists -> callback(false, "Email already exists")
+                                    phoneExists -> callback(false, "Phone already exists")
+                                    else -> callback(true, null)
+                                }
+                            } catch (e: Exception) {
+                                callback(false, "Check failed: ${e.message}")
+                            }
+                        }
+                    }
+                )
+            }
+            composable(
+                route = "dashboard/{userEmail}",
+                arguments = listOf(navArgument("userEmail") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val userEmailArg = backStackEntry.arguments?.getString("userEmail") ?: ""
+                DashboardScreen(
+                    userEmail = userEmailArg,
+                    isDarkMode = isDarkMode, // Pass the theme state
+                    onThemeToggle = ::toggleDarkMode, // Pass the theme toggle function
+                    onLogout = {
+                        context.stopService(Intent(context, StepCounterService::class.java))
+                        sharedPrefs.edit().remove("logged_in_email").apply()
+                        savedEmail = null
+                        navController.navigate("welcome") {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    onNavigateToWorkouts = { navController.navigate("workouts") },
+                    onNavigateToBMI = { navController.navigate("bmi/$userEmailArg") },
+                    onNavigateToTodo = { navController.navigate("todo/$userEmailArg") }
+                )
+            }
+            composable("workouts") {
+                WorkoutScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = "bmi/{userEmail}",
+                arguments = listOf(navArgument("userEmail") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val userEmailArg = backStackEntry.arguments?.getString("userEmail") ?: ""
+                BMIScreen(userEmail = userEmailArg, onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = "todo/{userEmail}",
+                arguments = listOf(navArgument("userEmail") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val userEmailArg = backStackEntry.arguments?.getString("userEmail") ?: ""
+                TodoScreen(userEmail = userEmailArg, onBack = { navController.popBackStack() })
+            }
         }
     }
 }
