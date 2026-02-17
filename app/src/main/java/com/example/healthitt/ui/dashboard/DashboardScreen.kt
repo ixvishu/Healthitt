@@ -61,6 +61,7 @@ import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -749,43 +750,82 @@ fun SleepLogModal(hours: Float, onUpdate: (Float) -> Unit, isDarkMode: Boolean, 
 @Composable
 fun MeditationModal(isDarkMode: Boolean, onDismiss: () -> Unit) {
     var active by remember { mutableStateOf(false) }
+    var zenText by remember { mutableStateOf("Ready?") }
     val infiniteTransition = rememberInfiniteTransition(label = "zen_pulse_transition")
 
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = if (active) 1.2f else 1f,
+        targetValue = if (active) 1.5f else 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = FastOutSlowInEasing),
+            animation = tween(3000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "zen_pulse_scale"
     )
 
+    LaunchedEffect(active) {
+        if (active) {
+            while (true) {
+                zenText = "Inhale..."
+                delay(3000)
+                zenText = "Exhale..."
+                delay(3000)
+            }
+        } else {
+            zenText = "Ready?"
+        }
+    }
+
     val color by animateColorAsState(
-        targetValue = if (active) RoseAccent else EmeraldPrimary,
-        animationSpec = tween(1500),
+        targetValue = if (active) SkyAccent else EmeraldPrimary,
+        animationSpec = tween(2000),
         label = "zen_pulse_color"
     )
-
-    val text = if (active) "Exhaling..." else "Start Session"
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Finish", color = EmeraldPrimary) } },
         text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                Text("Zen Pulse", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(200.dp)) {
+                    if (active) {
+                        Surface(
+                            modifier = Modifier.size(120.dp).scale(scale),
+                            shape = CircleShape,
+                            color = color.copy(alpha = 0.2f)
+                        ) {}
+                    }
+                    
+                    Icon(
+                        Icons.Rounded.SelfImprovement,
+                        null,
+                        tint = color,
+                        modifier = Modifier.size(100.dp).scale(if(active) scale * 0.8f else 1f)
+                    )
+                }
+                
                 Spacer(Modifier.height(32.dp))
-                Icon(Icons.Rounded.SelfImprovement, null, tint = color, modifier = Modifier.size(80.dp).scale(scale))
-                Spacer(Modifier.height(32.dp))
+                
+                Text(
+                    text = zenText,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = color,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Spacer(Modifier.height(40.dp))
+                
                 Button(
                     onClick = { active = !active },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = color)
                 ) {
-                    Text(text)
+                    Text(if (active) "Stop Session" else "Start Session", fontWeight = FontWeight.Bold)
                 }
             }
         }
