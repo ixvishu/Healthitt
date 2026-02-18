@@ -69,7 +69,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-const val CURRENT_APP_VERSION = "4.2.6"
+const val CURRENT_APP_VERSION = "4.2.7"
 
 @Composable
 fun DashboardScreen(
@@ -122,9 +122,17 @@ fun DashboardScreen(
     var aiHealthTip by remember { mutableStateOf("Syncing your vitals...") }
     var isAiLoading by remember { mutableStateOf(true) }
 
-    val generativeModel = remember {
+    // Using Gemini Pro Vision for image analysis and Gemini Pro for text
+    val visionModel = remember {
         GenerativeModel(
-            modelName = "gemini-1.5-flash", 
+            modelName = "gemini-pro-vision", 
+            apiKey = "AIzaSyBjr5NA9RL5ASEpbS3rmmSdvvZ_NLKHoA8", 
+            generationConfig = generationConfig { temperature = 0.4f }
+        )
+    }
+    val textModel = remember {
+        GenerativeModel(
+            modelName = "gemini-pro", 
             apiKey = "AIzaSyBjr5NA9RL5ASEpbS3rmmSdvvZ_NLKHoA8", 
             generationConfig = generationConfig { temperature = 0.7f }
         )
@@ -135,16 +143,17 @@ fun DashboardScreen(
         nutritionalResult = "Analyzing your meal..."
         scope.launch {
             try {
+                // Resize for efficiency
                 val scaledBitmap = Bitmap.createScaledBitmap(bitmap, 640, 480, true)
-                val response = generativeModel.generateContent(
+                val response = visionModel.generateContent(
                     content {
                         image(scaledBitmap)
-                        text("Brief nutritional analysis for this food. Calories, macros, and health rating. Concise.")
+                        text("Act as a professional nutritionist. Provide a brief analysis of this food image including estimated calories, macronutrients (protein, carbs, fats), and a health rating (1-10). Keep it concise.")
                     }
                 )
-                nutritionalResult = response.text ?: "Detection uncertain."
+                nutritionalResult = response.text ?: "AI couldn't identify the food clearly. Please try a different angle."
             } catch (e: Exception) {
-                nutritionalResult = "AI Offline: ${e.localizedMessage ?: "Check connection"}"
+                nutritionalResult = "AI Offline: System updating. Please try again later."
             } finally { isScanningFood = false }
         }
     }
@@ -176,7 +185,7 @@ fun DashboardScreen(
     LaunchedEffect(Unit) {
         scope.launch {
             try {
-                val response = generativeModel.generateContent("Encouraging health quote for an athlete (max 10 words).")
+                val response = textModel.generateContent("Provide a short, powerful health motivation for a high-performance athlete (max 10 words).")
                 aiHealthTip = response.text?.trim() ?: "Consistency is the key to progress."
             } catch (_: Exception) { 
                 aiHealthTip = "Small habits build great results." 
@@ -292,11 +301,11 @@ fun DashboardScreen(
     if (showWaterTracker) WaterTrackerModal(waterCount, { dailyStatsRef.child("water").setValue(it) }, isDarkMode, mainTextColor) { showWaterTracker = false }
     if (showSleepLog) SleepLogModal(sleepHours, { dailyStatsRef.child("sleep").setValue(it) }, isDarkMode, mainTextColor) { showSleepLog = false }
     if (showMedsReminder) MedicationManagerModal(user?.medicationsList ?: emptyList(), medsStatus, { id, taken -> dailyStatsRef.child("meds_v2").child(id).setValue(taken) }, { newList -> userRef.child("medications").setValue(newList) }, isDarkMode, mainTextColor) { showMedsReminder = false }
+    if (showHealthVault) VaultDialog(user, userRef, isDarkMode) { showHealthVault = false }
+    if (showWatchConnect) WatchDialog(bleManager, isDarkMode, mainTextColor) { showWatchConnect = false }
     if (showMeditation) MeditationModal(isDarkMode) { showMeditation = false }
     if (showAccountDetails) ProfileDialog(user, userRef, isDarkMode) { showAccountDetails = false }
     if (showAboutApp) AboutDialog(isDarkMode, mainTextColor) { showAboutApp = false }
-    if (showHealthVault) VaultDialog(user, userRef, isDarkMode) { showHealthVault = false }
-    if (showWatchConnect) WatchDialog(bleManager, isDarkMode, mainTextColor) { showWatchConnect = false }
 }
 
 @Composable
