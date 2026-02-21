@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -42,6 +43,10 @@ fun LoginScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp.dp
+    val isTablet = configuration.screenWidthDp >= 600
+
     val infiniteTransition = rememberInfiniteTransition(label = "glow")
     val glowAlpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
@@ -55,11 +60,11 @@ fun LoginScreen(
             .fillMaxSize()
             .background(NightDark)
     ) {
-        // Modern Animated Background
+        // Adaptive Background Orbs
         Box(
             modifier = Modifier
-                .size(400.dp)
-                .offset(x = (-150).dp, y = (-100).dp)
+                .size(screenWidth * 0.8f)
+                .offset(x = (-screenWidth * 0.3f), y = (-screenWidth * 0.2f))
                 .blur(80.dp)
                 .background(NeonCyan.copy(alpha = 0.15f), CircleShape)
         )
@@ -67,129 +72,147 @@ fun LoginScreen(
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .size(300.dp)
-                .offset(x = 100.dp, y = 100.dp)
+                .size(screenWidth * 0.6f)
+                .offset(x = (screenWidth * 0.2f), y = (screenWidth * 0.2f))
                 .blur(60.dp)
                 .background(NeonGreen.copy(alpha = 0.1f), CircleShape)
         )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.Start
-        ) {
-            Text(
-                text = "Welcome Back",
-                color = PureWhite.copy(alpha = 0.5f),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp
-            )
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val availableWidth = maxWidth
+            val availableHeight = maxHeight
             
-            Text(
-                text = "Healthitt",
-                style = MaterialTheme.typography.displayLarge.copy(
-                    brush = Brush.horizontalGradient(ActiveGradient)
-                ),
-                fontWeight = FontWeight.Black,
-                letterSpacing = (-2).sp
-            )
-            
-            Spacer(modifier = Modifier.height(48.dp))
-
-            // Glassmorphism Input Card
-            Surface(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, PureWhite.copy(0.05f), RoundedCornerShape(32.dp)),
-                color = GlassCard.copy(alpha = 0.8f),
-                shape = RoundedCornerShape(32.dp)
+                    .fillMaxSize()
+                    .padding(horizontal = (availableWidth * 0.1f).coerceAtLeast(24.dp))
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.Start
             ) {
-                Column(modifier = Modifier.padding(24.dp)) {
-                    Text("Enter your details", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Spacer(Modifier.height(24.dp))
-                    
-                    AuthTextField(
-                        value = emailOrPhone,
-                        onValueChange = { emailOrPhone = it; errorText = "" },
-                        label = "Email or Phone",
-                        icon = Icons.Rounded.Mail
-                    )
-                    
-                    Spacer(Modifier.height(20.dp))
-                    
-                    AuthTextField(
-                        value = password,
-                        onValueChange = { password = it; errorText = "" },
-                        label = "Password",
-                        icon = Icons.Rounded.Lock,
-                        isPassword = true,
-                        passwordVisible = passwordVisible,
-                        onPasswordToggle = { passwordVisible = !passwordVisible }
-                    )
-                }
-            }
+                Spacer(modifier = Modifier.height(availableHeight * 0.05f))
 
-            if (errorText.isNotEmpty()) {
                 Text(
-                    text = errorText,
-                    color = SunsetOrange,
-                    fontSize = 12.sp,
+                    text = "Welcome Back",
+                    color = PureWhite.copy(alpha = 0.5f),
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 16.dp, start = 8.dp)
+                    letterSpacing = 2.sp
                 )
-            }
+                
+                Text(
+                    text = "Healthitt",
+                    style = MaterialTheme.typography.displayLarge.copy(
+                        brush = Brush.horizontalGradient(ActiveGradient),
+                        fontSize = (availableWidth.value * 0.12f).coerceIn(40f, 72f).sp
+                    ),
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-2).sp
+                )
+                
+                Spacer(modifier = Modifier.height(availableHeight * 0.06f))
 
-            Spacer(modifier = Modifier.height(48.dp))
-
-            Button(
-                onClick = {
-                    if (emailOrPhone.isEmpty() || password.isEmpty()) {
-                        errorText = "Please fill in all fields"
-                    } else {
-                        isLoading = true
-                        onLoginClicked(emailOrPhone, password)
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .clip(RoundedCornerShape(20.dp)),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                contentPadding = PaddingValues(0.dp),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Box(
+                // Adaptive Input Card
+                Surface(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(Brush.horizontalGradient(ActiveGradient)),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth(if (isTablet) 0.8f else 1f)
+                        .align(Alignment.CenterHorizontally)
+                        .border(1.dp, PureWhite.copy(0.05f), RoundedCornerShape(32.dp)),
+                    color = GlassCard.copy(alpha = 0.8f),
+                    shape = RoundedCornerShape(32.dp)
                 ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(color = NightDark, modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
-                    } else {
-                        Text("Sign In", color = NightDark, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                    Column(modifier = Modifier.padding(adaptivePadding())) {
+                        Text("Enter your details", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(Modifier.height(24.dp))
+                        
+                        AuthTextField(
+                            emailOrPhone,
+                            { emailOrPhone = it; errorText = "" },
+                            "Email or Phone",
+                            Icons.Rounded.Mail
+                        )
+                        
+                        Spacer(Modifier.height(20.dp))
+                        
+                        AuthTextField(
+                            password,
+                            { password = it; errorText = "" },
+                            "Password",
+                            Icons.Rounded.Lock,
+                            true,
+                            passwordVisible,
+                            { passwordVisible = !passwordVisible }
+                        )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("New here?", color = PureWhite.copy(0.4f))
-                TextButton(onClick = onNavigateToRegister) {
-                    Text("Create Account", color = NeonCyan, fontWeight = FontWeight.Black)
+                if (errorText.isNotEmpty()) {
+                    Text(
+                        text = errorText,
+                        color = SunsetOrange,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 16.dp, start = 8.dp)
+                    )
                 }
+
+                Spacer(modifier = Modifier.height(availableHeight * 0.06f))
+
+                Button(
+                    onClick = {
+                        if (emailOrPhone.isEmpty() || password.isEmpty()) {
+                            errorText = "Please fill in all fields"
+                        } else {
+                            isLoading = true
+                            onLoginClicked(emailOrPhone, password)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth(if (isTablet) 0.6f else 1f)
+                        .align(Alignment.CenterHorizontally)
+                        .height(64.dp)
+                        .clip(RoundedCornerShape(20.dp)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Brush.horizontalGradient(ActiveGradient)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(color = NightDark, modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
+                        } else {
+                            Text("Sign In", color = NightDark, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("New here?", color = PureWhite.copy(0.4f))
+                    TextButton(onClick = onNavigateToRegister) {
+                        Text("Create Account", color = NeonCyan, fontWeight = FontWeight.Black)
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(availableHeight * 0.05f))
             }
         }
     }
+}
+
+@Composable
+private fun adaptivePadding(): androidx.compose.ui.unit.Dp {
+    val configuration = LocalConfiguration.current
+    return if (configuration.screenWidthDp > 600) 40.dp else 24.dp
 }
 
 @Composable

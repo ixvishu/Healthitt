@@ -7,6 +7,7 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.*
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
 
@@ -45,6 +46,25 @@ class HealthConnectManager(private val context: Context) {
             response.records.sumOf { it.count }
         } catch (e: Exception) {
             0L
+        }
+    }
+
+    suspend fun readTodaySleep(): Float {
+        val startOfDay = ZonedDateTime.now().toLocalDate().atStartOfDay(ZonedDateTime.now().zone).toInstant()
+        val now = Instant.now()
+        return try {
+            val response = healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    SleepSessionRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startOfDay, now)
+                )
+            )
+            val totalDuration = response.records.sumOf { 
+                Duration.between(it.startTime, it.endTime).toMinutes() 
+            }
+            totalDuration / 60f
+        } catch (e: Exception) {
+            0f
         }
     }
 

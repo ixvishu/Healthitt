@@ -25,6 +25,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -45,12 +46,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.healthitt.data.Avatars
 import com.example.healthitt.data.Medication
 import com.example.healthitt.data.User
 import com.example.healthitt.health.BleWatchManager
@@ -69,7 +74,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-const val CURRENT_APP_VERSION = "4.2.7"
+const val CURRENT_APP_VERSION = "4.3.2"
 
 @Composable
 fun DashboardScreen(
@@ -84,11 +89,13 @@ fun DashboardScreen(
     val view = LocalView.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp.dp
+    
     var user by remember { mutableStateOf<User?>(null) }
     var todaySteps by remember { mutableIntStateOf(0) }
     
     var waterCount by remember { mutableIntStateOf(0) }
-    var sleepHours by remember { mutableFloatStateOf(0f) }
     var medsStatus by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
 
     val bleManager = remember { BleWatchManager(context) }
@@ -113,16 +120,14 @@ fun DashboardScreen(
     var showAccountDetails by remember { mutableStateOf(false) }
     var showWaterTracker by remember { mutableStateOf(false) }
     var showMeditation by remember { mutableStateOf(false) }
-    var showSleepLog by remember { mutableStateOf(false) }
     var showMedsReminder by remember { mutableStateOf(false) }
     var showAboutApp by remember { mutableStateOf(false) }
     var showHealthVault by remember { mutableStateOf(false) }
     var showWatchConnect by remember { mutableStateOf(false) }
     
-    var aiHealthTip by remember { mutableStateOf("Syncing your vitals...") }
+    var aiHealthTip by remember { mutableStateOf("Checking your stats...") }
     var isAiLoading by remember { mutableStateOf(true) }
 
-    // Using Gemini Pro Vision for image analysis and Gemini Pro for text
     val visionModel = remember {
         GenerativeModel(
             modelName = "gemini-pro-vision", 
@@ -140,20 +145,19 @@ fun DashboardScreen(
 
     fun analyzeFood(bitmap: Bitmap) {
         isScanningFood = true
-        nutritionalResult = "Analyzing your meal..."
+        nutritionalResult = "Looking at your food..."
         scope.launch {
             try {
-                // Resize for efficiency
                 val scaledBitmap = Bitmap.createScaledBitmap(bitmap, 640, 480, true)
                 val response = visionModel.generateContent(
                     content {
                         image(scaledBitmap)
-                        text("Act as a professional nutritionist. Provide a brief analysis of this food image including estimated calories, macronutrients (protein, carbs, fats), and a health rating (1-10). Keep it concise.")
+                        text("Act as a friendly health coach. Explain what's in this food image in simple words. Give a health score out of 10 and suggest a simple tip.")
                     }
                 )
-                nutritionalResult = response.text ?: "AI couldn't identify the food clearly. Please try a different angle."
+                nutritionalResult = response.text ?: "I couldn't see the food clearly. Try again."
             } catch (e: Exception) {
-                nutritionalResult = "AI Offline: System updating. Please try again later."
+                nutritionalResult = "System is busy. Try again later."
             } finally { isScanningFood = false }
         }
     }
@@ -173,10 +177,8 @@ fun DashboardScreen(
             try {
                 cameraLauncher.launch(null)
             } catch (e: Exception) {
-                Toast.makeText(context, "Error launching camera", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Error using camera", Toast.LENGTH_SHORT).show()
             }
-        } else {
-            Toast.makeText(context, "Camera permission is required to scan food.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -185,10 +187,10 @@ fun DashboardScreen(
     LaunchedEffect(Unit) {
         scope.launch {
             try {
-                val response = textModel.generateContent("Provide a short, powerful health motivation for a high-performance athlete (max 10 words).")
-                aiHealthTip = response.text?.trim() ?: "Consistency is the key to progress."
+                val response = textModel.generateContent("Give a very simple and short health tip for a senior person (max 8 words).")
+                aiHealthTip = response.text?.trim() ?: "Keep moving and stay hydrated."
             } catch (_: Exception) { 
-                aiHealthTip = "Small habits build great results." 
+                aiHealthTip = "Small habits bring big results." 
             } finally { 
                 isAiLoading = false 
             }
@@ -200,7 +202,6 @@ fun DashboardScreen(
                     user = snapshot.getValue(User::class.java)
                     todaySteps = snapshot.child("daily_history").child(todayDate).getValue(Int::class.java) ?: 0
                     waterCount = snapshot.child("daily_stats").child(todayDate).child("water").getValue(Int::class.java) ?: 0
-                    sleepHours = snapshot.child("daily_stats").child(todayDate).child("sleep").getValue(Float::class.java) ?: 0f
                     
                     val medsSnapshot = snapshot.child("daily_stats").child(todayDate).child("meds_v2")
                     val currentMeds = mutableMapOf<String, Boolean>()
@@ -210,9 +211,7 @@ fun DashboardScreen(
                         currentMeds[name] = taken
                     }
                     medsStatus = currentMeds
-                } catch (e: Exception) {
-                    println("Error loading user data: ${e.message}")
-                }
+                } catch (e: Exception) {}
             }
             override fun onCancelled(error: DatabaseError) {}
         })
@@ -223,18 +222,18 @@ fun DashboardScreen(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet(drawerContainerColor = cardColor, modifier = Modifier.width(300.dp)) {
+            ModalDrawerSheet(drawerContainerColor = cardColor, modifier = Modifier.widthIn(max = screenWidth * 0.8f)) {
                 Column(modifier = Modifier.padding(24.dp).fillMaxHeight()) {
                     Text("Healthitt", style = MaterialTheme.typography.headlineLarge, color = EmeraldPrimary, fontWeight = FontWeight.Bold)
-                    Text("Elite Performance Tracker", color = mainTextColor.copy(alpha = 0.4f), fontSize = 10.sp, letterSpacing = 2.sp)
+                    Text("Your Health Companion", color = mainTextColor.copy(alpha = 0.4f), fontSize = 12.sp)
                     Spacer(Modifier.height(40.dp))
                     
-                    DrawerItem("Identity", Icons.Rounded.Person) { hapticFeedback(); showAccountDetails = true; scope.launch { drawerState.close() } }
-                    DrawerItem("Link Wearable", Icons.Rounded.Bluetooth) { hapticFeedback(); showWatchConnect = true; scope.launch { drawerState.close() } }
-                    DrawerItem("Training", Icons.Rounded.FitnessCenter) { hapticFeedback(); onNavigateToWorkouts(); scope.launch { drawerState.close() } }
-                    DrawerItem("Protocols", Icons.AutoMirrored.Rounded.Assignment) { hapticFeedback(); onNavigateToTodo(); scope.launch { drawerState.close() } }
-                    DrawerItem("Biometrics", Icons.Rounded.MonitorWeight) { hapticFeedback(); onNavigateToBMI(); scope.launch { drawerState.close() } }
-                    DrawerItem("Health Vault", Icons.Rounded.Https) { hapticFeedback(); showHealthVault = true; scope.launch { drawerState.close() } }
+                    DrawerItem("My Profile", Icons.Rounded.Person) { hapticFeedback(); showAccountDetails = true; scope.launch { drawerState.close() } }
+                    DrawerItem("Connect Watch", Icons.Rounded.Bluetooth) { hapticFeedback(); showWatchConnect = true; scope.launch { drawerState.close() } }
+                    DrawerItem("My Exercises", Icons.Rounded.FitnessCenter) { hapticFeedback(); onNavigateToWorkouts(); scope.launch { drawerState.close() } }
+                    DrawerItem("My Reminders", Icons.AutoMirrored.Rounded.Assignment) { hapticFeedback(); onNavigateToTodo(); scope.launch { drawerState.close() } }
+                    DrawerItem("My Weight", Icons.Rounded.MonitorWeight) { hapticFeedback(); onNavigateToBMI(); scope.launch { drawerState.close() } }
+                    DrawerItem("Emergency Info", Icons.Rounded.Https) { hapticFeedback(); showHealthVault = true; scope.launch { drawerState.close() } }
                     
                     Spacer(modifier = Modifier.height(24.dp))
                     HorizontalDivider(color = mainTextColor.copy(alpha = 0.1f))
@@ -243,7 +242,7 @@ fun DashboardScreen(
                     DrawerItem("About App", Icons.Rounded.Info) { hapticFeedback(); showAboutApp = true; scope.launch { drawerState.close() } }
                     
                     Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onThemeToggle(!isDarkMode) }.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Dark Mode", color = mainTextColor, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                        Text("Dark Theme", color = mainTextColor, fontWeight = FontWeight.Medium, fontSize = 14.sp)
                         Switch(checked = isDarkMode, onCheckedChange = { onThemeToggle(it) }, colors = SwitchDefaults.colors(checkedThumbColor = EmeraldPrimary))
                     }
                     Spacer(Modifier.weight(1f))
@@ -254,52 +253,60 @@ fun DashboardScreen(
     ) {
         Scaffold(
             containerColor = bgColor,
-            topBar = { DashboardHeader(user?.name ?: "Athlete", mainTextColor) { hapticFeedback(); scope.launch { drawerState.open() } } }
+            topBar = { DashboardHeader(user?.name ?: "User", mainTextColor) { hapticFeedback(); scope.launch { drawerState.open() } } }
         ) { padding ->
-            Column(modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(padding)) {
+                val availableWidth = maxWidth
+                val isWide = availableWidth > 600.dp
                 
-                VitalityPowerMeter(todaySteps, waterCount, sleepHours, mainTextColor)
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                NutriScanBanner(mainTextColor) { 
-                    hapticFeedback()
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                        try {
+                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = (availableWidth * 0.05f).coerceAtLeast(16.dp))) {
+                    
+                    VitalityPowerMeter(todaySteps, waterCount, mainTextColor)
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    NutriScanBanner(mainTextColor) { 
+                        hapticFeedback()
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                             cameraLauncher.launch(null)
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Error launching camera", Toast.LENGTH_SHORT).show()
+                        } else {
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    HealthTipBanner(aiHealthTip, isAiLoading, mainTextColor)
+                    
+                    if (watchConnectionState == "Connected") {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        LiveWearableBanner(watchHeartRate, mainTextColor)
+                    }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+                    Text("Daily Stats", color = mainTextColor, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    if (isWide) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            StatTile("Water", "$waterCount Glasses", Icons.Rounded.WaterDrop, SkyAccent, Modifier.weight(1f), isDarkMode, { showWaterTracker = true })
+                            StatTile("Zen Time", "Start", Icons.Rounded.SelfImprovement, EmeraldPrimary, Modifier.weight(1f), isDarkMode, { showMeditation = true })
+                            StatTile("Medicine", "${medsStatus.values.count { it }} Taken", Icons.Rounded.Medication, RoseAccent, Modifier.weight(1f), isDarkMode, { showMedsReminder = true })
                         }
                     } else {
-                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        StatGrid(isDarkMode, waterCount, medsStatus.values.count { it }, { showWaterTracker = true }, { showMeditation = true }, { showMedsReminder = true })
                     }
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
+                    DailyQuestBanner(mainTextColor)
+                    Spacer(modifier = Modifier.height(40.dp))
                 }
-
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                HealthTipBanner(aiHealthTip, isAiLoading, mainTextColor)
-                
-                if (watchConnectionState == "Connected") {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    LiveWearableBanner(watchHeartRate, mainTextColor)
-                }
-
-                Spacer(modifier = Modifier.height(32.dp))
-                Text("Vital Telemetry", color = mainTextColor, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                StatGrid(isDarkMode, waterCount, sleepHours, medsStatus.values.count { it }, { showWaterTracker = true }, { showMeditation = true }, { showSleepLog = true }, { showMedsReminder = true })
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                DailyQuestBanner(mainTextColor)
-                Spacer(modifier = Modifier.height(40.dp))
             }
         }
     }
 
     if (showNutriModal) NutriResultModal(capturedBitmap, nutritionalResult, isScanningFood, isDarkMode, mainTextColor) { showNutriModal = false }
     if (showWaterTracker) WaterTrackerModal(waterCount, { dailyStatsRef.child("water").setValue(it) }, isDarkMode, mainTextColor) { showWaterTracker = false }
-    if (showSleepLog) SleepLogModal(sleepHours, { dailyStatsRef.child("sleep").setValue(it) }, isDarkMode, mainTextColor) { showSleepLog = false }
     if (showMedsReminder) MedicationManagerModal(user?.medicationsList ?: emptyList(), medsStatus, { id, taken -> dailyStatsRef.child("meds_v2").child(id).setValue(taken) }, { newList -> userRef.child("medications").setValue(newList) }, isDarkMode, mainTextColor) { showMedsReminder = false }
     if (showHealthVault) VaultDialog(user, userRef, isDarkMode) { showHealthVault = false }
     if (showWatchConnect) WatchDialog(bleManager, isDarkMode, mainTextColor) { showWatchConnect = false }
@@ -309,11 +316,10 @@ fun DashboardScreen(
 }
 
 @Composable
-fun VitalityPowerMeter(steps: Int, water: Int, sleep: Float, textColor: Color) {
-    val stepScore = (steps / 10000f).coerceIn(0f, 1f) * 40
-    val waterScore = (water / 8f).coerceIn(0f, 1f) * 30
-    val sleepScore = (sleep / 8f).coerceIn(0f, 1f) * 30
-    val totalScore = (stepScore + waterScore + sleepScore).toInt()
+fun VitalityPowerMeter(steps: Int, water: Int, textColor: Color) {
+    val stepScore = (steps / 10000f).coerceIn(0f, 1f) * 60
+    val waterScore = (water / 8f).coerceIn(0f, 1f) * 40
+    val totalScore = (stepScore + waterScore).toInt()
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -321,11 +327,11 @@ fun VitalityPowerMeter(steps: Int, water: Int, sleep: Float, textColor: Color) {
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, Brush.linearGradient(listOf(EmeraldPrimary.copy(alpha = 0.2f), SkyAccent.copy(alpha = 0.2f))))
     ) {
-        Column(modifier = Modifier.padding(28.dp)) {
+        Column(modifier = Modifier.padding(adaptivePadding())) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Column {
-                    Text("VITALITY POWER", color = EmeraldPrimary, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                    Row(verticalAlignment = Alignment.Bottom) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("HEALTH SCORE", color = EmeraldPrimary, fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                         Text("$totalScore%", color = textColor, fontSize = 42.sp, fontWeight = FontWeight.Black)
                         Spacer(Modifier.width(12.dp))
                         Text("${steps} STEPS", color = textColor.copy(alpha = 0.4f), fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
@@ -339,32 +345,22 @@ fun VitalityPowerMeter(steps: Int, water: Int, sleep: Float, textColor: Color) {
             Row(modifier = Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(textColor.copy(alpha = 0.05f))) {
                 Box(modifier = Modifier.fillMaxHeight().weight(stepScore + 0.1f).background(EmeraldPrimary))
                 Box(modifier = Modifier.fillMaxHeight().weight(waterScore + 0.1f).background(SkyAccent))
-                Box(modifier = Modifier.fillMaxHeight().weight(sleepScore + 0.1f).background(AmberAccent))
             }
             
             Spacer(Modifier.height(16.dp))
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                PowerStat("STEPS", EmeraldPrimary)
+                PowerStat("WALKING", EmeraldPrimary)
                 PowerStat("WATER", SkyAccent)
-                PowerStat("SLEEP", AmberAccent)
             }
-            
-            Spacer(Modifier.height(20.dp))
-            
-            Text(
-                text = when {
-                    totalScore > 80 -> "STATUS: ELITE ATHLETE READY"
-                    totalScore > 50 -> "STATUS: OPTIMIZED FOR TRAINING"
-                    else -> "STATUS: RECOVERY PROTOCOL ACTIVE"
-                },
-                color = textColor.copy(alpha = 0.5f),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
         }
     }
+}
+
+@Composable
+fun adaptivePadding(): androidx.compose.ui.unit.Dp {
+    val configuration = LocalConfiguration.current
+    return if (configuration.screenWidthDp > 600) 32.dp else 20.dp
 }
 
 @Composable
@@ -385,11 +381,11 @@ fun DailyQuestBanner(textColor: Color) {
         border = BorderStroke(1.dp, SkyAccent.copy(alpha = 0.2f))
     ) {
         Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.WorkspacePremium, null, tint = SkyAccent, modifier = Modifier.size(32.dp))
+            Icon(Icons.Rounded.Star, null, tint = SkyAccent, modifier = Modifier.size(32.dp))
             Spacer(Modifier.width(16.dp))
             Column {
-                Text("DAILY QUEST", color = SkyAccent, fontWeight = FontWeight.Black, fontSize = 10.sp, letterSpacing = 2.sp)
-                Text("Hit 10k steps for a Power Boost", color = textColor, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text("DAILY GOAL", color = SkyAccent, fontWeight = FontWeight.Black, fontSize = 10.sp, letterSpacing = 1.sp)
+                Text("Walk 10,000 steps for a bonus", color = textColor, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
         }
     }
@@ -409,18 +405,6 @@ fun MedicationManagerModal(
     var editingMed by remember { mutableStateOf<Medication?>(null) }
     val context = LocalContext.current
 
-    fun handleSave(med: Medication) {
-        val newList = if (editingMed != null) {
-            medications.map { if (it.id == med.id) med else it }
-        } else {
-            medications + med
-        }
-        if (med.isEnabled) scheduleMedicationAlarm(context, med)
-        onUpdateMedsList(newList)
-        isAdding = false
-        editingMed = null
-    }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
@@ -429,7 +413,7 @@ fun MedicationManagerModal(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Medication, null, tint = EmeraldPrimary)
                 Spacer(Modifier.width(12.dp))
-                Text("Medication Tracker", color = textColor, fontWeight = FontWeight.Bold)
+                Text("Medicine Reminders", color = textColor, fontWeight = FontWeight.Bold)
             }
         },
         text = {
@@ -466,7 +450,7 @@ fun MedicationManagerModal(
                 ) {
                     Icon(Icons.Rounded.Add, null, tint = if(isDarkMode) DeepSlate else Color.White)
                     Spacer(Modifier.width(8.dp))
-                    Text("New Medication", color = if(isDarkMode) DeepSlate else Color.White, fontWeight = FontWeight.Bold)
+                    Text("Add New Medicine", color = if(isDarkMode) DeepSlate else Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -475,7 +459,13 @@ fun MedicationManagerModal(
     if (isAdding || editingMed != null) {
         MedicationEditorDialog(
             initialMed = editingMed,
-            onSave = ::handleSave,
+            onSave = { med ->
+                val newList = if (editingMed != null) medications.map { if (it.id == med.id) med else it } else medications + med
+                if (med.isEnabled) scheduleMedicationAlarm(context, med)
+                onUpdateMedsList(newList)
+                isAdding = false
+                editingMed = null
+            },
             onDismiss = { isAdding = false; editingMed = null },
             isDarkMode = isDarkMode
         )
@@ -514,7 +504,7 @@ fun MedicationRow(
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = textColor.copy(alpha = 0.1f))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
                 Icon(if(med.isEnabled) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsOff, null, tint = if(med.isEnabled) AmberAccent else textColor.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
-                Text(if(med.isEnabled) "Reminder On" else "Reminder Off", color = textColor.copy(alpha = 0.6f), fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+                Text(if(med.isEnabled) "Alarm On" else "Alarm Off", color = textColor.copy(alpha = 0.6f), fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
                 Spacer(Modifier.weight(1f))
                 Switch(
                     checked = med.isEnabled, 
@@ -546,10 +536,10 @@ fun MedicationEditorDialog(
             Button(onClick = { if(name.isNotBlank()) onSave(Medication(initialMed?.id ?: UUID.randomUUID().toString(), name, time, enabled)) }, shape = RoundedCornerShape(12.dp)) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        title = { Text(if(initialMed == null) "Add Medication" else "Edit Medication", fontWeight = FontWeight.Bold) },
+        title = { Text(if(initialMed == null) "Add Medicine" else "Edit Medicine", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name (e.g. Vitamin D)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name (e.g. Vitamin)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
                 
                 Surface(
                     onClick = {
@@ -619,8 +609,8 @@ fun NutriScanBanner(textColor: Color, onClick: () -> Unit) {
             Icon(Icons.Rounded.AutoAwesome, null, tint = EmeraldPrimary, modifier = Modifier.size(28.dp))
             Spacer(Modifier.width(16.dp))
             Column {
-                Text("Nutri-Scan AI", color = textColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text("Snapshot your meal for instant analysis", color = textColor.copy(alpha = 0.6f), fontSize = 12.sp)
+                Text("Food Scanner AI", color = textColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Take a photo of your food to see how healthy it is", color = textColor.copy(alpha = 0.6f), fontSize = 12.sp)
             }
             Spacer(Modifier.weight(1f))
             Icon(Icons.Rounded.ChevronRight, null, tint = EmeraldPrimary)
@@ -655,21 +645,20 @@ fun LiveWearableBanner(hr: Int, textColor: Color) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Favorite, null, tint = RoseAccent, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
-            Text("Syncing: $hr BPM", color = textColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("Syncing Heart Rate: $hr BPM", color = textColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-fun StatGrid(isDarkMode: Boolean, water: Int, sleep: Float, meds: Int, onWater: () -> Unit, onZen: () -> Unit, onSleep: () -> Unit, onMeds: () -> Unit) {
+fun StatGrid(isDarkMode: Boolean, water: Int, meds: Int, onWater: () -> Unit, onZen: () -> Unit, onMeds: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            StatTile("Hydration", "$water Gl", Icons.Rounded.WaterDrop, SkyAccent, Modifier.weight(1f), isDarkMode, onWater)
-            StatTile("Zen Mode", "Start", Icons.Rounded.SelfImprovement, EmeraldPrimary, Modifier.weight(1f), isDarkMode, onZen)
+            StatTile("Water", "$water Glasses", Icons.Rounded.WaterDrop, SkyAccent, Modifier.weight(1f), isDarkMode, onWater)
+            StatTile("Zen Time", "Start", Icons.Rounded.SelfImprovement, EmeraldPrimary, Modifier.weight(1f), isDarkMode, onZen)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            StatTile("Recovery", "${sleep.toInt()}h", Icons.Rounded.Bedtime, AmberAccent, Modifier.weight(1f), isDarkMode, onSleep)
-            StatTile("Meds", "$meds Taken", Icons.Rounded.Medication, RoseAccent, Modifier.weight(1f), isDarkMode, onMeds)
+            StatTile("Medicine", "$meds Taken", Icons.Rounded.Medication, RoseAccent, Modifier.fillMaxWidth(), isDarkMode, onMeds)
         }
     }
 }
@@ -693,12 +682,12 @@ fun StatTile(label: String, value: String, icon: androidx.compose.ui.graphics.ve
 
 @Composable
 fun DashboardHeader(name: String, textColor: Color, onMenu: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onMenu) { 
             Icon(Icons.AutoMirrored.Rounded.Segment, null, tint = EmeraldPrimary, modifier = Modifier.size(32.dp)) 
         }
         Column(horizontalAlignment = Alignment.End) {
-            Text("EVALUATING", color = EmeraldPrimary, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
+            Text("Checking Health", color = EmeraldPrimary, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
             Text(name.uppercase(), color = textColor, fontSize = 24.sp, fontWeight = FontWeight.Black)
         }
     }
@@ -710,11 +699,11 @@ fun NutriResultModal(capturedBitmap: Bitmap?, nutritionalResult: String, isScann
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text("CLOSE", color = EmeraldPrimary, fontWeight = FontWeight.Black) } },
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("NUTRI-ANALYSIS", fontWeight = FontWeight.Black, fontSize = 16.sp, letterSpacing = 1.sp) },
+        title = { Text("Food Report", fontWeight = FontWeight.Black, fontSize = 16.sp, letterSpacing = 1.sp) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 capturedBitmap?.let {
-                    Image(bitmap = it.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(20.dp)), contentScale = ContentScale.Crop)
+                    Image(bitmap = it.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).clip(RoundedCornerShape(20.dp)), contentScale = ContentScale.Fit)
                 }
                 Spacer(Modifier.height(16.dp))
                 if (isScanningFood) {
@@ -740,27 +729,114 @@ fun DrawerItem(label: String, icon: androidx.compose.ui.graphics.vector.ImageVec
 
 @Composable
 fun ProfileDialog(user: User?, userRef: DatabaseReference, isDarkMode: Boolean, onDismiss: () -> Unit) {
-    var weight by remember { mutableStateOf(user?.weight ?: "") }
-    var height by remember { mutableStateOf(user?.height ?: "") }
-    AlertDialog(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface, 
-        confirmButton = { Button(onClick = { userRef.child("weight").setValue(weight); userRef.child("height").setValue(height); onDismiss() }, shape = RoundedCornerShape(12.dp)) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        title = { Text("Profile Identity", fontWeight = FontWeight.Bold) },
+    val context = LocalContext.current
+    var isChangingAvatar by remember { mutableStateOf(false) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss, 
+        containerColor = MaterialTheme.colorScheme.surface, 
+        confirmButton = { Button(onClick = onDismiss, shape = RoundedCornerShape(12.dp)) { Text("Done") } },
+        title = { 
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.AccountCircle, null, tint = EmeraldPrimary, modifier = Modifier.size(28.dp))
+                Spacer(Modifier.width(12.dp))
+                Text("My Profile Info", fontWeight = FontWeight.Bold)
+            }
+        },
         text = { 
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { 
-                OutlinedTextField(value = weight, onValueChange = { weight = it }, label = { Text("Weight (kg)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-                OutlinedTextField(value = height, onValueChange = { height = it }, label = { Text("Height (ft)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) { 
+                // Profile Picture with Change Option
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    Surface(
+                        modifier = Modifier.size(100.dp),
+                        shape = CircleShape,
+                        color = EmeraldPrimary.copy(alpha = 0.1f),
+                        border = BorderStroke(2.dp, EmeraldPrimary)
+                    ) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context).data(user?.profilePicUrl).crossfade(true).build(),
+                            contentDescription = "Profile",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    SmallFloatingActionButton(
+                        onClick = { isChangingAvatar = !isChangingAvatar },
+                        modifier = Modifier.size(32.dp),
+                        shape = CircleShape,
+                        containerColor = EmeraldPrimary,
+                        contentColor = Color.White
+                    ) {
+                        Icon(Icons.Rounded.Edit, null, modifier = Modifier.size(16.dp))
+                    }
+                }
+                
+                if (isChangingAvatar) {
+                    Spacer(Modifier.height(16.dp))
+                    Text("Select New Avatar", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EmeraldPrimary)
+                    Spacer(Modifier.height(8.dp))
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) {
+                        items(Avatars.list) { avatarUrl ->
+                            Surface(
+                                modifier = Modifier.size(50.dp).clickable { 
+                                    userRef.child("profilePicUrl").setValue(avatarUrl)
+                                },
+                                shape = CircleShape,
+                                border = if (user?.profilePicUrl == avatarUrl) BorderStroke(2.dp, EmeraldPrimary) else null
+                            ) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context).data(avatarUrl).build(),
+                                    contentDescription = "Avatar Option",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                Spacer(Modifier.height(24.dp))
+                
+                // Details List
+                ProfileDetailRow("Name", user?.name ?: "N/A")
+                ProfileDetailRow("Email", user?.email ?: "N/A")
+                ProfileDetailRow("Phone", user?.phone ?: "N/A")
+                ProfileDetailRow("Gender", user?.gender ?: "N/A")
+                ProfileDetailRow("Birth Date", user?.dob ?: "N/A")
+                
+                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                
+                ProfileDetailRow("Height", "${user?.height} ft")
+                ProfileDetailRow("Weight", "${user?.weight} kg")
             } 
         }
     )
 }
 
 @Composable
+fun ProfileDetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(value, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
 fun WaterTrackerModal(count: Int, onUpdate: (Int) -> Unit, isDarkMode: Boolean, textColor: Color, onDismiss: () -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface, confirmButton = { Button(onClick = onDismiss, shape = RoundedCornerShape(12.dp)) { Text("Save") } },
+    AlertDialog(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface, confirmButton = { Button(onClick = onDismiss, shape = RoundedCornerShape(12.dp)) { Text("Done") } },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
-                Text("Hydration Log", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("Water Log", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(Modifier.height(24.dp))
                 Text("$count Glasses", color = textColor, fontSize = 48.sp, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(32.dp))
@@ -768,21 +844,6 @@ fun WaterTrackerModal(count: Int, onUpdate: (Int) -> Unit, isDarkMode: Boolean, 
                     FilledIconButton(onClick = { if(count > 0) onUpdate(count - 1) }, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Remove, null) }
                     FilledIconButton(onClick = { onUpdate(count + 1) }, modifier = Modifier.size(56.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = EmeraldPrimary)) { Icon(Icons.Rounded.Add, null) }
                 }
-            }
-        }
-    )
-}
-
-@Composable
-fun SleepLogModal(hours: Float, onUpdate: (Float) -> Unit, isDarkMode: Boolean, textColor: Color, onDismiss: () -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface, confirmButton = { Button(onClick = onDismiss, shape = RoundedCornerShape(12.dp)) { Text("Log") } },
-        text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Recovery Sleep", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Spacer(Modifier.height(24.dp))
-                Text("${hours.toInt()} Hours", color = textColor, fontSize = 48.sp, fontWeight = FontWeight.Black)
-                Spacer(Modifier.height(16.dp))
-                Slider(value = hours, onValueChange = onUpdate, valueRange = 0f..12f, colors = SliderDefaults.colors(thumbColor = EmeraldPrimary, activeTrackColor = EmeraldPrimary))
             }
         }
     )
@@ -807,9 +868,9 @@ fun MeditationModal(isDarkMode: Boolean, onDismiss: () -> Unit) {
     LaunchedEffect(active) {
         if (active) {
             while (true) {
-                zenText = "Inhale..."
+                zenText = "Breathe in..."
                 delay(3000)
-                zenText = "Exhale..."
+                zenText = "Breathe out..."
                 delay(3000)
             }
         } else {
@@ -879,11 +940,11 @@ fun VaultDialog(user: User?, userRef: DatabaseReference, isDarkMode: Boolean, on
     var blood by remember { mutableStateOf(user?.bloodGroup ?: "") }
     AlertDialog(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface, 
         confirmButton = { Button(onClick = { userRef.child("emergencyContact").setValue(contact); userRef.child("bloodGroup").setValue(blood); onDismiss() }, shape = RoundedCornerShape(12.dp)) { Text("Save") } },
-        title = { Text("Health Vault", fontWeight = FontWeight.Bold) },
+        title = { Text("Emergency Info", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedTextField(value = blood, onValueChange = { blood = it }, label = { Text("Blood Group") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-                OutlinedTextField(value = contact, onValueChange = { contact = it }, label = { Text("Emergency Contact") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                OutlinedTextField(value = contact, onValueChange = { contact = it }, label = { Text("Contact Person Number") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
             }
         }
     )
@@ -903,23 +964,23 @@ fun WatchDialog(bleManager: BleWatchManager, isDarkMode: Boolean, textColor: Col
         onDismissRequest = { bleManager.stopDiscovery(); onDismiss() },
         containerColor = MaterialTheme.colorScheme.surface,
         confirmButton = { Button(onClick = onDismiss, shape = RoundedCornerShape(12.dp)) { Text("Close") } },
-        title = { Text("Universal Sync", fontWeight = FontWeight.Bold) },
+        title = { Text("Connect a Watch", fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 if (!isScanning) {
                     Button(onClick = {
                         val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT) else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
                         permissionLauncher.launch(perms)
-                    }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) { Text("Initialize Scan") }
+                    }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) { Text("Search for Devices") }
                 } else {
                     if (connectionState == "Connecting...") LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = EmeraldPrimary)
                     LazyColumn(modifier = Modifier.height(200.dp)) {
                         items(foundDevices) { device ->
                             val deviceName = try {
                                 @SuppressLint("MissingPermission")
-                                device.name ?: "Wearable Device"
+                                device.name ?: "Smart Watch"
                             } catch (_: SecurityException) {
-                                "Wearable Device"
+                                "Smart Watch"
                             }
                             Text(deviceName, modifier = Modifier.fillMaxWidth().clickable { bleManager.connectDevice(device) }.padding(12.dp), color = textColor, fontWeight = FontWeight.Bold)
                         }
@@ -933,7 +994,7 @@ fun WatchDialog(bleManager: BleWatchManager, isDarkMode: Boolean, textColor: Col
 @Composable
 fun AboutDialog(isDarkMode: Boolean, textColor: Color, onDismiss: () -> Unit) {
     AlertDialog(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface, confirmButton = { Button(onClick = onDismiss, shape = RoundedCornerShape(12.dp)) { Text("Close") } }, 
-        title = { Text("Core System", fontWeight = FontWeight.Bold) },
-        text = { Text("Healthitt version $CURRENT_APP_VERSION. Premium athlete telemetry engine.", color = textColor) }
+        title = { Text("About This App", fontWeight = FontWeight.Bold) },
+        text = { Text("Healthitt is your personal companion to help you stay healthy and active.", color = textColor) }
     )
 }

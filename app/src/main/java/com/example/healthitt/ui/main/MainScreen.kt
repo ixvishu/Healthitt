@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,22 +44,24 @@ fun MainScreen(
     onLogout: () -> Unit
 ) {
     val bottomNavController = rememberNavController()
+    val configuration = LocalConfiguration.current
+    val isTablet = configuration.screenWidthDp >= 600
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            // Docked Bottom Navigation with rounded top corners for a premium feel
+            // Adaptive Bottom Navigation
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding(),
-                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                shape = RoundedCornerShape(topStart = if (isTablet) 40.dp else 32.dp, topEnd = if (isTablet) 40.dp else 32.dp),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
                 tonalElevation = 16.dp,
                 shadowElevation = 24.dp,
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
             ) {
-                AppBottomNavigation(navController = bottomNavController)
+                AppBottomNavigation(navController = bottomNavController, isTablet = isTablet)
             }
         }
     ) { padding ->
@@ -89,7 +92,7 @@ fun MainScreen(
 }
 
 @Composable
-fun AppBottomNavigation(navController: NavHostController) {
+fun AppBottomNavigation(navController: NavHostController, isTablet: Boolean) {
     val view = LocalView.current
     val items = listOf(
         NavigationItem("dashboard", Icons.Rounded.Home, "Home"),
@@ -103,8 +106,8 @@ fun AppBottomNavigation(navController: NavHostController) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(80.dp)
-            .padding(horizontal = 16.dp),
+            .height(if (isTablet) 96.dp else 80.dp)
+            .padding(horizontal = if (isTablet) 64.dp else 16.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -135,11 +138,11 @@ fun AppBottomNavigation(navController: NavHostController) {
                     imageVector = item.icon,
                     contentDescription = item.title,
                     tint = if (isSelected) EmeraldPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                    modifier = Modifier.size(if (isSelected) 28.dp else 24.dp)
+                    modifier = Modifier.size(if (isSelected) (if(isTablet) 32.dp else 28.dp) else (if(isTablet) 28.dp else 24.dp))
                 )
                 Text(
                     text = item.title,
-                    fontSize = 11.sp,
+                    fontSize = if (isTablet) 13.sp else 11.sp,
                     fontWeight = if (isSelected) FontWeight.Black else FontWeight.Medium,
                     color = if (isSelected) EmeraldPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                     modifier = Modifier.alpha(if (isSelected) 1f else 0.7f)
