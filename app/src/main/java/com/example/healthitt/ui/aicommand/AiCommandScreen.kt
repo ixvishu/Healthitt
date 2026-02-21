@@ -16,9 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -62,20 +64,18 @@ fun AiCommandScreen(userEmail: String) {
         }
     }
 
-    fun runLongevitySimulation() {
+    fun runHealthSimulation() {
         if (user == null) return
         isAnalyzing = true
         scope.launch {
             try {
-                delay(2500) 
-                
+                delay(2000) 
                 val prompt = """
-                    Act as a warm, encouraging health coach for seniors. 
-                    Subject: ${user?.name}, Gender: ${user?.gender}, Weight: ${user?.weight}kg, Height: ${user?.height}ft.
+                    Act as a elite fitness coach. User: ${user?.name}, Stats: ${user?.weight}kg, ${user?.height}ft.
                     Provide:
-                    1. Estimated Body Age (simple number).
-                    2. A short, very positive health outlook for the next few years.
-                    3. One very simple daily tip (like drinking water or walking).
+                    1. Estimated 'Athletic Age' (how old their fitness level feels).
+                    2. A short, high-energy fitness outlook for the next 10 years.
+                    3. One professional 'Pro-Athlete Tip'.
                     Format: BodyAge: [Number] | Outlook: [Text] | Tip: [Text]
                 """.trimIndent()
 
@@ -86,26 +86,37 @@ fun AiCommandScreen(userEmail: String) {
                     bioAge = parts[0].filter { it.isDigit() }.toIntOrNull()
                     forecastText = parts[1].replace("Outlook:", "").trim()
                     tipText = parts[2].replace("Tip:", "").trim()
-                    syncScore = (0.75f + (Math.random() * 0.2f)).toFloat() 
+                    syncScore = (0.8f + (Math.random() * 0.15f)).toFloat() 
                 }
             } catch (e: Exception) {
-                forecastText = "I'm having a little trouble connecting. Please try again in a moment."
+                forecastText = "Network glitch. Ready for a retry?"
             } finally {
                 isAnalyzing = false
             }
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // Soft background glow
-        Box(
-            modifier = Modifier
-                .size(400.dp)
-                .offset(y = (-150).dp)
-                .align(Alignment.TopCenter)
-                .blur(100.dp)
-                .background(EmeraldPrimary.copy(alpha = 0.15f), CircleShape)
-        )
+    Box(modifier = Modifier.fillMaxSize().background(MidnightBlack)) {
+        // --- BATTERY EFFICIENT BACKGROUND ---
+        // Zero animations in background when static to save battery
+        if (isAnalyzing) {
+            val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+            val bgAlpha by infiniteTransition.animateFloat(
+                initialValue = 0.05f, targetValue = 0.15f,
+                animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse), label = "alpha"
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(ElectricLime.copy(alpha = bgAlpha), Color.Transparent),
+                            center = androidx.compose.ui.geometry.Offset(500f, 500f),
+                            radius = 1000f
+                        )
+                    )
+            )
+        }
 
         Column(
             modifier = Modifier
@@ -117,135 +128,133 @@ fun AiCommandScreen(userEmail: String) {
             Spacer(Modifier.height(60.dp))
             
             Text(
-                "Health Companion",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.ExtraBold
+                "ATHLETIC AI",
+                style = MaterialTheme.typography.displaySmall,
+                color = ElectricLime,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 2.sp
             )
             Text(
-                "Your simple guide to a better tomorrow",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                "PERFORMANCE SIMULATION",
+                style = MaterialTheme.typography.labelMedium,
+                color = PureWhite.copy(alpha = 0.4f),
+                letterSpacing = 4.sp
             )
 
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(50.dp))
 
-            // Central Soft Hero Card
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(280.dp),
-                shape = RoundedCornerShape(40.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp,
-                shadowElevation = 12.dp,
-                border = BorderStroke(1.dp, EmeraldPrimary.copy(alpha = 0.1f))
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    // Pulsing background for the score
-                    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-                    val pulseScale by infiniteTransition.animateFloat(
-                        initialValue = 1f, targetValue = 1.1f,
-                        animationSpec = infiniteRepeatable(tween(2000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse"
-                    )
+            // --- ANIMATED CIRCULAR PROGRESS ---
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(260.dp)) {
+                val animatedScore by animateFloatAsState(
+                    targetValue = if (isAnalyzing) 0.2f else if (bioAge != null) syncScore else 0f,
+                    animationSpec = tween(1500, easing = FastOutSlowInEasing), label = "score"
+                )
 
+                CircularProgressIndicator(
+                    progress = 1f,
+                    modifier = Modifier.fillMaxSize(),
+                    color = PureWhite.copy(alpha = 0.05f),
+                    strokeWidth = 8.dp,
+                    strokeCap = StrokeCap.Round
+                )
+                
+                CircularProgressIndicator(
+                    progress = animatedScore,
+                    modifier = Modifier.fillMaxSize(),
+                    color = if (isAnalyzing) NeonCyan else ElectricLime,
+                    strokeWidth = 14.dp,
+                    strokeCap = StrokeCap.Round
+                )
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     if (isAnalyzing) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(80.dp),
-                                color = EmeraldPrimary,
-                                strokeWidth = 6.dp
-                            )
-                            Spacer(Modifier.height(24.dp))
-                            Text("Taking a look...", fontWeight = FontWeight.Bold, color = EmeraldPrimary)
-                        }
+                        val rotation = rememberInfiniteTransition(label = "rot")
+                        val angle by rotation.animateFloat(
+                            initialValue = 0f, targetValue = 360f,
+                            animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing)), label = "angle"
+                        )
+                        Icon(
+                            Icons.Rounded.Sync, null, 
+                            tint = ElectricLime, 
+                            modifier = Modifier.size(60.dp).rotate(angle)
+                        )
                     } else if (bioAge != null) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("YOUR BODY FEELS", fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
-                            Text("$bioAge", fontSize = 80.sp, fontWeight = FontWeight.Black, color = EmeraldPrimary, modifier = Modifier.graphicsLayer { scaleX = pulseScale; scaleY = pulseScale })
-                            Text("YEARS YOUNG", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = EmeraldPrimary)
-                        }
+                        Text("FITNESS AGE", color = PureWhite.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("$bioAge", color = PureWhite, fontSize = 80.sp, fontWeight = FontWeight.Black, letterSpacing = (-4).sp)
+                        Text("LEVEL: ELITE", color = ElectricLime, fontSize = 14.sp, fontWeight = FontWeight.Black)
                     } else {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-                            Icon(Icons.Rounded.AutoAwesome, null, tint = EmeraldPrimary, modifier = Modifier.size(64.dp))
-                            Spacer(Modifier.height(16.dp))
-                            Text("Ready for your check-up?", textAlign = TextAlign.Center, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        }
+                        Icon(Icons.Rounded.Bolt, null, tint = ElectricLime, modifier = Modifier.size(100.dp))
                     }
                 }
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(50.dp))
 
+            // --- ACTION BUTTON ---
             Button(
-                onClick = { runLongevitySimulation() },
+                onClick = { runHealthSimulation() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(72.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp),
+                    .height(64.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = if (isAnalyzing) DarkSurface else ElectricLime),
+                elevation = ButtonDefaults.buttonElevation(0.dp),
                 enabled = !isAnalyzing
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.HealthAndSafety, null)
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        if (bioAge == null) "Start My Health Check" else "Update My Report",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Text(
+                    if (bioAge == null) "RUN ANALYSIS" else "SYNC DATA",
+                    color = MidnightBlack, 
+                    fontSize = 18.sp, 
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 2.sp
+                )
             }
 
-            if ((forecastText.isNotEmpty() || tipText.isNotEmpty()) && !isAnalyzing) {
-                Spacer(Modifier.height(32.dp))
+            // --- REVEAL CONTENT ---
+            AnimatedVisibility(
+                visible = bioAge != null && !isAnalyzing,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    Spacer(Modifier.height(32.dp))
+                    
+                    PerformanceCard(
+                        title = "10-YEAR PROJECTION",
+                        content = forecastText,
+                        icon = Icons.Rounded.Timeline,
+                        accentColor = NeonCyan
+                    )
 
-                // Outlook Card
-                SimpleInfoCard(
-                    title = "Your Future Health",
-                    content = forecastText,
-                    icon = Icons.Rounded.WbSunny,
-                    accentColor = SkyAccent
-                )
+                    Spacer(Modifier.height(16.dp))
 
-                Spacer(Modifier.height(16.dp))
-
-                // Tip Card
-                SimpleInfoCard(
-                    title = "Simple Daily Tip",
-                    content = tipText.ifEmpty { "Try walking for 10 minutes after lunch today to feel more active." },
-                    icon = Icons.Rounded.Lightbulb,
-                    accentColor = AmberAccent
-                )
-
-                Spacer(Modifier.height(32.dp))
-
-                // Score Bar
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 4.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(24.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    PerformanceCard(
+                        title = "ELITE TRAINING TIP",
+                        content = tipText,
+                        icon = Icons.Rounded.Verified,
+                        accentColor = BlazeOrange
+                    )
+                    
+                    Spacer(Modifier.height(32.dp))
+                    
+                    // PERFORMANCE SYNC
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = DarkSurface,
+                        border = BorderStroke(1.dp, PureWhite.copy(alpha = 0.05f))
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Health Match", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                            Text("${(syncScore * 100).toInt()}%", fontSize = 28.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
-                        }
-                        Box(contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(
+                        Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("BIOMETRIC ACCURACY", color = PureWhite.copy(alpha = 0.4f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("${(syncScore * 100).toInt()}%", color = PureWhite, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                            }
+                            LinearProgressIndicator(
                                 progress = syncScore,
-                                color = EmeraldPrimary,
-                                strokeWidth = 8.dp,
-                                modifier = Modifier.size(60.dp),
-                                trackColor = EmeraldPrimary.copy(alpha = 0.1f),
-                                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                                color = ElectricLime,
+                                trackColor = PureWhite.copy(alpha = 0.05f),
+                                modifier = Modifier.width(80.dp).height(8.dp).clip(CircleShape)
                             )
-                            Icon(Icons.Rounded.Check, null, tint = EmeraldPrimary, modifier = Modifier.size(24.dp))
                         }
                     }
                 }
@@ -257,28 +266,20 @@ fun AiCommandScreen(userEmail: String) {
 }
 
 @Composable
-fun SimpleInfoCard(title: String, content: String, icon: androidx.compose.ui.graphics.vector.ImageVector, accentColor: Color) {
+fun PerformanceCard(title: String, content: String, icon: androidx.compose.ui.graphics.vector.ImageVector, accentColor: Color) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(32.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 4.dp
+        shape = RoundedCornerShape(16.dp),
+        color = DarkSurface,
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f))
     ) {
-        Row(modifier = Modifier.padding(24.dp)) {
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                color = accentColor.copy(alpha = 0.1f)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = accentColor, modifier = Modifier.size(24.dp))
-                }
-            }
-            Spacer(Modifier.width(20.dp))
+        Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.Top) {
+            Icon(icon, null, tint = accentColor, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(16.dp))
             Column {
-                Text(title, fontSize = 14.sp, fontWeight = FontWeight.Black, color = accentColor)
-                Spacer(Modifier.height(4.dp))
-                Text(content, fontSize = 16.sp, lineHeight = 24.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f), fontWeight = FontWeight.Medium)
+                Text(title, color = accentColor, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                Spacer(Modifier.height(6.dp))
+                Text(content, color = PureWhite, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
             }
         }
     }
